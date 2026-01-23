@@ -28,6 +28,7 @@ const useEmailOtp = () => {
     endpoint,
     payload,
     onSuccess,
+    onError,
     successMessage,
   }) => {
     try {
@@ -38,6 +39,7 @@ const useEmailOtp = () => {
       return res.data;
     } catch (error) {
       toast.error("OTP verification failed");
+      onError?.(error);
       return null;
     } finally {
       setIsSubmitting(false);

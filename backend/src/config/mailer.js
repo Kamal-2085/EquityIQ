@@ -38,3 +38,37 @@ export const sendOtpEmail = async ({ to, name, otp }) => {
     html,
   });
 };
+
+export const sendAddMoneyEmail = async ({ to, name, amount, dateTime }) => {
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+
+  const subject = "We’ve received your add-money request";
+  const formattedAmount = `₹${amount}`;
+  const text = `Hi ${name},\n\nWe’ve received your request to add funds to your EquityIQ account.\n\nTransaction details:\n• Amount: ${formattedAmount}\n• Date & time: ${dateTime}\n• Status: Processing\n\nYour payment is currently being verified by our payment partner.\nThis usually takes a few minutes, but in rare cases it may take a day.\n\nOnce confirmed, the funds will be available in your EquityIQ account automatically.\n\nIf the payment is unsuccessful, the amount will be refunded to your source account as per bank timelines.\n\nYou don’t need to take any action right now.\n\nThanks for trusting EquityIQ.\n\n—\nTeam EquityIQ`;
+
+  const html = `
+    <p>Hi ${name},</p>
+    <p>We’ve received your request to add funds to your EquityIQ account.</p>
+    <p><strong>Transaction details:</strong><br />
+      • Amount: ${formattedAmount}<br />
+      • Date &amp; time: ${dateTime}<br />
+      • Status: Processing
+    </p>
+    <p>Your payment is currently being verified by our payment partner.<br />
+      This usually takes a few minutes, but in rare cases it may take a day.</p>
+    <p>Once confirmed, the funds will be available in your EquityIQ account automatically.</p>
+    <p>If the payment is unsuccessful, the amount will be refunded to your source account as per bank timelines.</p>
+    <p>You don’t need to take any action right now.</p>
+    <p>Thanks for trusting EquityIQ.</p>
+    <p>—<br />Team EquityIQ</p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+  });
+};

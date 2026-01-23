@@ -3,11 +3,14 @@ import img53 from "../assets/img53.jpeg";
 import img47 from "../assets/img47.png";
 import toast from "react-hot-toast";
 import useEmailOtp from "../hooks/useEmailOtp.js";
+import { useNavigate } from "react-router-dom";
 const Right2 = ({ onBack, amount }) => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
   const { isSubmitting, sendOtp, verifyOtp } = useEmailOtp();
+  const navigate = useNavigate();
 
   const handleCancelYes = () => {
     setShowCancelConfirm(false);
@@ -36,16 +39,22 @@ const Right2 = ({ onBack, amount }) => {
       toast.error("Please login to continue");
       return;
     }
-    if (!otp || otp.length !== 6) {
-      toast.error("Enter a valid 6-digit OTP");
+    const normalizedOtp = otp.trim();
+    if (!normalizedOtp || normalizedOtp.length !== 6) {
+      setOtpError("Enter a valid 6-digit OTP");
       return;
     }
+    setOtpError("");
     await verifyOtp({
-      endpoint: "http://localhost:5000/api/auth/verify-email-otp",
-      payload: { email, otp },
-      successMessage: "Payment verified successfully ✅",
+      endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
+      payload: { email, otp: normalizedOtp, amount },
+      successMessage: "OTP verified Payment will be coinfrmed shortly",
       onSuccess: () => {
         setOtp("");
+        navigate("/");
+      },
+      onError: () => {
+        navigate("/");
       },
     });
   };
@@ -100,6 +109,9 @@ const Right2 = ({ onBack, amount }) => {
               className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-center tracking-widest outline-none focus:border-emerald-500"
               placeholder="••••••"
             />
+            {otpError && (
+              <p className="mt-2 text-sm text-red-500">{otpError}</p>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-3">

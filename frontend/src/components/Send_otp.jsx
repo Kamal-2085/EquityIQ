@@ -42,7 +42,7 @@ const Send_otp = () => {
     await verifyOtp({
       endpoint: "http://localhost:5000/api/auth/verify-email-otp",
       payload,
-      successMessage: "Email verified successfully ✅",
+      successMessage: "User registered Successfully",
       onSuccess: (response) => {
         if (response?.user) {
           const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -53,6 +53,9 @@ const Send_otp = () => {
         resetOtpForm();
         setStep("signup");
         setPendingEmail("");
+        navigate("/");
+      },
+      onError: () => {
         navigate("/");
       },
     });

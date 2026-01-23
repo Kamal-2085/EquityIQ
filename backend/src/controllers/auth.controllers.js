@@ -1,7 +1,7 @@
 import User from "../models/User.model.js";
 import PendingUser from "../models/PendingUser.model.js";
 import bcrypt from "bcryptjs";
-import { sendOtpEmail } from "../config/mailer.js";
+import { sendAddMoneyEmail, sendOtpEmail } from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
@@ -142,6 +142,59 @@ export const sendPaymentOtp = async (req, res) => {
       }
       return res.status(200).json(response);
     }
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const verifyPaymentOtp = async (req, res) => {
+  try {
+    const { email, otp, amount } = req.body;
+    const normalizedOtp = String(otp || "").trim();
+
+    if (!email || !normalizedOtp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.otpHash || !user.otpExpires) {
+      return res
+        .status(400)
+        .json({ message: "OTP not found. Please request a new one." });
+    }
+
+    if (Date.now() > user.otpExpires.getTime()) {
+      return res
+        .status(400)
+        .json({ message: "OTP expired. Please request a new one." });
+    }
+
+    const isMatch = await bcrypt.compare(normalizedOtp, user.otpHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+
+    user.otpHash = null;
+    user.otpExpires = null;
+    await user.save();
+
+    const dateTime = new Date().toLocaleString();
+    try {
+      await sendAddMoneyEmail({
+        to: user.email,
+        name: user.name,
+        amount: amount || 0,
+        dateTime,
+      });
+    } catch (mailError) {
+      console.error("Add money email send failed:", mailError);
+    }
+
+    return res.status(200).json({ message: "OTP verified" });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
