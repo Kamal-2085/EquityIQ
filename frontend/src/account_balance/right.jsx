@@ -1,10 +1,26 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import img47 from "../assets/img47.png";
+import toast from "react-hot-toast";
+import Right2 from "./right_2.jsx";
 const Right = () => {
   const [activeTab, setActiveTab] = useState("add");
+  const [showQr, setShowQr] = useState(false);
+  const [amount, setAmount] = useState(0);
 
   const isAdd = activeTab === "add";
+
+  if (showQr) {
+    return <Right2 amount={Number(amount)} onBack={() => setShowQr(false)} />;
+  }
+
+  const handleAddMoney = () => {
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount < 100) {
+      toast.error("Amount should be more than 100");
+      return;
+    }
+    setShowQr(true);
+  };
 
   return (
     <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -46,8 +62,15 @@ const Right = () => {
                 <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2">
                   <span className="text-emerald-600 font-semibold">₹</span>
                   <input
-                    className="text-emerald-600 font-semibold text-right"
-                    value="0"
+                    className="text-emerald-600 font-semibold text-right outline-none"
+                    value={amount}
+                    onChange={(event) => {
+                      const nextValue = event.target.value.replace(
+                        /[^0-9.]/g,
+                        "",
+                      );
+                      setAmount(nextValue);
+                    }}
                   />
                 </div>
               </div>
@@ -55,28 +78,11 @@ const Right = () => {
           </div>
 
           <div className="border-t border-gray-200" />
-
-          <button
-            type="button"
-            className="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-gray-50"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-lg">
-                <img src={img47} alt="QR Code" />
-              </span>
-              <div>
-                <div className="text-sm font-semibold text-gray-700">
-                  Scan QR to pay
-                </div>
-              </div>
-            </div>
-            <span className="text-gray-400 text-xl leading-none">›</span>
-          </button>
-
           <div className="px-6 py-6">
             <button
               type="button"
-              className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600"
+              onClick={handleAddMoney}
+              className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer"
             >
               Add money
             </button>
