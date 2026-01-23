@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 const ProfileMenu = ({
   user,
@@ -42,13 +43,13 @@ const ProfileMenu = ({
       </div>
 
       <div className="py-2">
-        <button
-          type="button"
+        <Link
+          to="/account-balance"
           className="w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
         >
           <span>Account Balance</span>
           <span className="text-gray-900 font-medium">₹0</span>
-        </button>
+        </Link>
         <button
           type="button"
           onClick={onProfileImageClick}
