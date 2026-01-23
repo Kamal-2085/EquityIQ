@@ -1,15 +1,24 @@
-import React from "react";
+import React, { useState } from "react";
 import img53 from "../assets/img53.jpeg";
 import img47 from "../assets/img47.png";
+import toast from "react-hot-toast";
 const Right2 = ({ onBack, amount }) => {
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const handleCancelYes = () => {
+    setShowCancelConfirm(false);
+    toast.success("Payment cancelled successfully");
+    onBack?.();
+  };
+
   return (
     <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onBack}
-            className="text-gray-500 hover:text-gray-700 text-xl"
+            onClick={() => setShowCancelConfirm(true)}
+            className="text-gray-500 hover:text-gray-700 text-xl cursor-pointer"
           >
             ←
           </button>
@@ -52,9 +61,35 @@ const Right2 = ({ onBack, amount }) => {
           type="button"
           className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer"
         >
-            I've Paid
+          I've Paid
         </button>
       </div>
+
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <p className="text-sm font-semibold text-gray-800 text-center">
+              Are You sure ,You want to cancel the payment
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={handleCancelYes}
+                className="rounded-lg bg-red-500 px-6 py-2 text-sm font-semibold text-white hover:bg-red-600 cursor-pointer"
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCancelConfirm(false)}
+                className="rounded-lg bg-green-500 px-6 py-2 text-sm font-semibold text-white hover:bg-green-600 cursor-pointer"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
