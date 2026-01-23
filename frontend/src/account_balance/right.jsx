@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import img47 from "../assets/img47.png";
 const Right = () => {
   const [activeTab, setActiveTab] = useState("add");
@@ -87,12 +88,12 @@ const Right = () => {
             <div className="h-16 w-16 rounded-full border-2 border-emerald-500 text-emerald-500 flex items-center justify-center text-3xl font-semibold">
               +
             </div>
-            <button
-              type="button"
-              className="w-full rounded-xl bg-blue-600 py-3.5 text-white text-sm font-semibold hover:bg-blue-700  cursor-pointer"
+            <Link
+              to="/add-account"
+              className="w-full rounded-xl bg-blue-600 py-3.5 text-white text-sm font-semibold hover:bg-blue-700 text-center"
             >
               Add your account first
-            </button>
+            </Link>
           </div>
         </>
       )}
