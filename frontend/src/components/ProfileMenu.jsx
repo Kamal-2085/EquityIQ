@@ -44,9 +44,10 @@ const ProfileMenu = ({
       <div className="py-2">
         <button
           type="button"
-          className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
+          className="w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
         >
-          Account Balance
+          <span>Account Balance</span>
+          <span className="text-gray-900 font-medium">₹0</span>
         </button>
         <button
           type="button"
