@@ -23,6 +23,7 @@ import InvestorCharterPage from "./landing_page/investor_charter/Investor-charte
 import Disclosure from "./landing_page/disclosure.jsx";
 import PulseLayout from "./Pulse/PulseLayout.jsx";
 import PulseDashboard from "./Pulse/pluse_dashboard/dashboard_page.jsx";
+import AccountPage from "./account_balance/account_page.jsx";
 
 const LandingLayout = () => (
   <>
@@ -53,6 +54,7 @@ const App = () => {
           <Route path="/login" element={<Login_page />} />
           <Route path="/investor-charter" element={<InvestorCharterPage />} />
           <Route path="/disclosure" element={<Disclosure />} />
+          <Route path="/account-balance" element={<AccountPage />} />
           <Route path="*" element={<Not_found />} />
         </Route>
 
