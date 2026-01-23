@@ -2,13 +2,52 @@ import React, { useState } from "react";
 import img53 from "../assets/img53.jpeg";
 import img47 from "../assets/img47.png";
 import toast from "react-hot-toast";
+import useEmailOtp from "../hooks/useEmailOtp.js";
 const Right2 = ({ onBack, amount }) => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const { isSubmitting, sendOtp, verifyOtp } = useEmailOtp();
 
   const handleCancelYes = () => {
     setShowCancelConfirm(false);
     toast.success("Payment cancelled successfully");
     onBack?.();
+  };
+
+  const handleSendOtp = async () => {
+    const stored = JSON.parse(localStorage.getItem("equityiq_user") || "{}");
+    const email = stored?.user?.email;
+    if (!email) {
+      toast.error("Please login to continue");
+      return;
+    }
+    await sendOtp({
+      endpoint: "http://localhost:5000/api/auth/send-payment-otp",
+      payload: { email },
+      onSuccess: () => setOtpSent(true),
+    });
+  };
+
+  const handleVerifyOtp = async () => {
+    const stored = JSON.parse(localStorage.getItem("equityiq_user") || "{}");
+    const email = stored?.user?.email;
+    if (!email) {
+      toast.error("Please login to continue");
+      return;
+    }
+    if (!otp || otp.length !== 6) {
+      toast.error("Enter a valid 6-digit OTP");
+      return;
+    }
+    await verifyOtp({
+      endpoint: "http://localhost:5000/api/auth/verify-email-otp",
+      payload: { email, otp },
+      successMessage: "Payment verified successfully ✅",
+      onSuccess: () => {
+        setOtp("");
+      },
+    });
   };
 
   return (
@@ -45,13 +84,33 @@ const Right2 = ({ onBack, amount }) => {
 
       <div className="border-t border-gray-200" />
 
-      <div className="px-6 py-4 flex items-center gap-3">
-        <div className="h-9 w-9 rounded-full  text-white flex items-center justify-center">
-          <img src={img47} alt="Info" className="text-xs font-semibold" />
-        </div>
-        <div className="text-sm font-semibold text-gray-700">
-          UPI ID : 7004352857-1@superyes
-        </div>
+      <div className="px-6 py-4">
+        {otpSent ? (
+          <div>
+            <label className="block text-sm font-semibold text-gray-700">
+              Enter OTP
+            </label>
+            <input
+              type="text"
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, ""))
+              }
+              maxLength={6}
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-center tracking-widest outline-none focus:border-emerald-500"
+              placeholder="••••••"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-full text-white flex items-center justify-center">
+              <img src={img47} alt="Info" className="text-xs font-semibold" />
+            </div>
+            <div className="text-sm font-semibold text-gray-700">
+              UPI ID : 7004352857-1@superyes
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-gray-200" />
@@ -59,9 +118,17 @@ const Right2 = ({ onBack, amount }) => {
       <div className="px-6 py-3 text-center text-xs text-gray-500">
         <button
           type="button"
-          className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer"
+          onClick={otpSent ? handleVerifyOtp : handleSendOtp}
+          disabled={isSubmitting}
+          className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer disabled:opacity-60"
         >
-          I've Paid
+          {isSubmitting
+            ? otpSent
+              ? "Verifying OTP..."
+              : "Sending OTP..."
+            : otpSent
+            ? "Verify OTP"
+            : "I've Paid"}
         </button>
       </div>
 

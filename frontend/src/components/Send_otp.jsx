@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import axios from "axios";
-import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
+import useEmailOtp from "../hooks/useEmailOtp.js";
 
 const Send_otp = () => {
   const [step, setStep] = useState("signup");
   const [pendingEmail, setPendingEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { isSubmitting, sendOtp, verifyOtp } = useEmailOtp();
   const navigate = useNavigate();
 
   const {
@@ -24,59 +23,39 @@ const Send_otp = () => {
   } = useForm();
 
   const onSubmit = async (data) => {
-    try {
-      setIsSubmitting(true);
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/signup",
-        data,
-      );
-      if (res.data?.otpSent) {
+    await sendOtp({
+      endpoint: "http://localhost:5000/api/auth/signup",
+      payload: data,
+      successMessage: "OTP sent to your email 📩",
+      onSuccess: () => {
         setPendingEmail(data.email);
         setStep("verify");
-        toast.success("OTP sent to your email 📩");
-      } else if (res.data?.otpPreview) {
-        //have to remove this in production
-        setPendingEmail(data.email);
-        setStep("verify");
-        toast.success("OTP sent successfully");
-      } else {
-        toast.error(res.data?.message || "Unable to send OTP email");
-      }
-      console.log(res.data);
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Signup failed");
-    } finally {
-      setIsSubmitting(false);
-    }
+      },
+    });
   };
 
   const onVerifyOtp = async (data) => {
-    try {
-      setIsSubmitting(true);
-      const payload = {
-        email: pendingEmail,
-        otp: data.otpCode,
-      };
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/verify-email-otp",
-        payload,
-      );
-      toast.success("Email verified successfully ✅");
-      if (res.data?.user) {
-        const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
-        const payload = { user: res.data.user, expiresAt };
-        localStorage.setItem("equityiq_user", JSON.stringify(payload));
-        window.dispatchEvent(new Event("equityiq_user_updated"));
-      }
-      resetOtpForm();
-      setStep("signup");
-      setPendingEmail("");
-      navigate("/");
-    } catch (error) {
-      toast.error(error.response?.data?.message || "OTP verification failed");
-    } finally {
-      setIsSubmitting(false);
-    }
+    const payload = {
+      email: pendingEmail,
+      otp: data.otpCode,
+    };
+    await verifyOtp({
+      endpoint: "http://localhost:5000/api/auth/verify-email-otp",
+      payload,
+      successMessage: "Email verified successfully ✅",
+      onSuccess: (response) => {
+        if (response?.user) {
+          const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+          const userPayload = { user: response.user, expiresAt };
+          localStorage.setItem("equityiq_user", JSON.stringify(userPayload));
+          window.dispatchEvent(new Event("equityiq_user_updated"));
+        }
+        resetOtpForm();
+        setStep("signup");
+        setPendingEmail("");
+        navigate("/");
+      },
+    });
   };
 
   useEffect(() => {
@@ -129,7 +108,7 @@ const Send_otp = () => {
             <input
               {...register("phone", {
                 required: true,
-                pattern: /^\+?[0-9]{7,15}$/,
+                pattern: /^\d{10}$/,
               })}
               type="tel"
               className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -140,7 +119,7 @@ const Send_otp = () => {
             )}
             {errors.phone?.type === "pattern" && (
               <p className="text-red-500 text-sm mt-1">
-                Enter a valid phone number
+                Enter a valid 10-digit phone number
               </p>
             )}
           </div>

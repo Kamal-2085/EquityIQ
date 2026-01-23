@@ -34,6 +34,13 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    const existingUser = await User.findOne({
+      $or: [{ email: email.toLowerCase() }, { phone }],
+    });
+    if (existingUser) {
+      return res.status(409).json({ message: "User already exist" });
+    }
+
     const existingPendingByEmail = await PendingUser.findOne({ email });
     const existingPendingByPhone = await PendingUser.findOne({ phone });
 
@@ -91,6 +98,49 @@ export const signup = async (req, res) => {
         response.otpPreview = otp;
       }
       return res.status(201).json(response);
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const sendPaymentOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+
+    user.otpHash = otpHash;
+    user.otpExpires = otpExpires;
+    await user.save();
+
+    try {
+      await sendOtpEmail({ to: user.email, name: user.name, otp });
+      return res.status(200).json({
+        message: "OTP sent to email.",
+        otpSent: true,
+      });
+    } catch (mailError) {
+      console.error("Payment OTP email send failed:", mailError);
+      const response = {
+        message: "Failed to send OTP email. Please try again later.",
+        otpSent: false,
+      };
+      if (process.env.NODE_ENV !== "production") {
+        response.otpPreview = otp;
+      }
+      return res.status(200).json(response);
     }
   } catch (error) {
     res.status(500).json({ message: "Server error" });
