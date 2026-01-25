@@ -1,19 +1,33 @@
 import nodemailer from "nodemailer";
 
 const getTransporter = () => {
+  const service = process.env.SMTP_SERVICE;
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT || 587);
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
+  const secureEnv = process.env.SMTP_SECURE;
+  const secure = secureEnv ? secureEnv === "true" : port === 465;
 
-  if (!host || !user || !pass) {
+  if (!user || !pass) {
     throw new Error("SMTP credentials are missing in environment variables");
+  }
+
+  if (service) {
+    return nodemailer.createTransport({
+      service,
+      auth: { user, pass },
+    });
+  }
+
+  if (!host) {
+    throw new Error("SMTP_HOST is missing in environment variables");
   }
 
   return nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
+    secure,
     auth: { user, pass },
   });
 };
@@ -21,6 +35,7 @@ const getTransporter = () => {
 export const sendOtpEmail = async ({ to, name, otp }) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = process.env.SMTP_REPLY_TO;
 
   const subject = "Your EquityIQ verification code";
   const text = `Hi ${name},\n\nYour verification code is ${otp}. It expires in 10 minutes.\n\nIf you didn't request this, you can ignore this email.`;
@@ -36,12 +51,14 @@ export const sendOtpEmail = async ({ to, name, otp }) => {
     subject,
     text,
     html,
+    ...(replyTo ? { replyTo } : {}),
   });
 };
 
 export const sendAddMoneyEmail = async ({ to, name, amount, dateTime }) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = process.env.SMTP_REPLY_TO;
 
   const subject = "We’ve received your add-money request";
   const formattedAmount = `₹${amount}`;
@@ -70,5 +87,6 @@ export const sendAddMoneyEmail = async ({ to, name, amount, dateTime }) => {
     subject,
     text,
     html,
+    ...(replyTo ? { replyTo } : {}),
   });
 };

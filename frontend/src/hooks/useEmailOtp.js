@@ -9,8 +9,15 @@ const useEmailOtp = () => {
     try {
       setIsSubmitting(true);
       const res = await axios.post(endpoint, payload);
-      if (res.data?.otpSent || res.data?.otpPreview) {
+      if (res.data?.otpSent) {
         toast.success(successMessage || "OTP sent successfully");
+        onSuccess?.(res.data);
+      } else if (res.data?.otpPreview) {
+        toast.error(
+          res.data?.message ||
+            "Email not sent. Check email service configuration.",
+        );
+        toast.success(`Dev OTP: ${res.data.otpPreview}`);
         onSuccess?.(res.data);
       } else {
         toast.error(res.data?.message || "Unable to send OTP");

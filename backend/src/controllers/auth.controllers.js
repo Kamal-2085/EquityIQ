@@ -30,18 +30,24 @@ export const signup = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
 
-    if (!name || !email || !phone || !password) {
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+
+    if (!name || !normalizedEmail || !phone || !password) {
       return res.status(400).json({ message: "All fields are required" });
     }
 
     const existingUser = await User.findOne({
-      $or: [{ email: email.toLowerCase() }, { phone }],
+      $or: [{ email: normalizedEmail }, { phone }],
     });
     if (existingUser) {
       return res.status(409).json({ message: "User already exist" });
     }
 
-    const existingPendingByEmail = await PendingUser.findOne({ email });
+    const existingPendingByEmail = await PendingUser.findOne({
+      email: normalizedEmail,
+    });
     const existingPendingByPhone = await PendingUser.findOne({ phone });
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -52,7 +58,7 @@ export const signup = async (req, res) => {
 
     const pendingPayload = {
       name,
-      email,
+      email: normalizedEmail,
       phone,
       password: hashedPassword,
       otpHash,
@@ -60,7 +66,7 @@ export const signup = async (req, res) => {
     };
 
     if (existingPendingByEmail) {
-      await PendingUser.updateOne({ email }, pendingPayload);
+      await PendingUser.updateOne({ email: normalizedEmail }, pendingPayload);
     } else if (existingPendingByPhone) {
       await PendingUser.updateOne({ phone }, pendingPayload);
     } else {
@@ -68,13 +74,13 @@ export const signup = async (req, res) => {
     }
 
     try {
-      await sendOtpEmail({ to: email, name, otp });
+      await sendOtpEmail({ to: normalizedEmail, name, otp });
       return res.status(201).json({
         message: "Signup successful. OTP sent to email.",
         otpSent: true,
         user: {
           name,
-          email,
+          email: normalizedEmail,
           phone,
           isEmailVerified: false,
           avatarUrl: null,
@@ -88,7 +94,7 @@ export const signup = async (req, res) => {
         otpSent: false,
         user: {
           name,
-          email,
+          email: normalizedEmail,
           phone,
           isEmailVerified: false,
           avatarUrl: null,
@@ -204,11 +210,16 @@ export const verifyEmailOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    if (!email || !otp) {
+    const normalizedEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    const normalizedOtp = String(otp || "").trim();
+
+    if (!normalizedEmail || !normalizedOtp) {
       return res.status(400).json({ message: "Email and OTP are required" });
     }
 
-    const pendingUser = await PendingUser.findOne({ email });
+    const pendingUser = await PendingUser.findOne({ email: normalizedEmail });
     if (!pendingUser) {
       return res.status(404).json({ message: "Pending signup not found" });
     }
@@ -223,7 +234,7 @@ export const verifyEmailOtp = async (req, res) => {
         .json({ message: "OTP expired. Please request a new one." });
     }
 
-    const isMatch = await bcrypt.compare(otp, pendingUser.otpHash);
+    const isMatch = await bcrypt.compare(normalizedOtp, pendingUser.otpHash);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid OTP" });
     }
@@ -251,7 +262,7 @@ export const verifyEmailOtp = async (req, res) => {
       });
     }
 
-    await PendingUser.deleteOne({ email });
+    await PendingUser.deleteOne({ email: normalizedEmail });
 
     res.status(200).json({
       message: "Email verified successfully",
