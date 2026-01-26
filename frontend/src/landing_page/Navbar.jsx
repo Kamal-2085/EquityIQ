@@ -157,6 +157,17 @@ const Navbar = () => {
     toast.error("Please Signup/Login First");
   };
 
+  const isLoggedIn = !!localStorage.getItem("equityiq_user");
+
+  const handleSignupClick = (e) => {
+    if (isLoggedIn) {
+      e.preventDefault();
+      toast.error("You are already Logged in. Please Logout first", {
+        icon: "❌",
+      });
+    }
+  };
+
   return (
     <>
       <nav className="fixed top-0 left-0 w-full bg-white border-b border-gray-200 z-50">
@@ -174,7 +185,7 @@ const Navbar = () => {
           {/* Desktop Navigation - Hidden on mobile, visible on medium screens and up */}
           <div className="hidden md:flex">
             <ul className="flex items-center gap-8 text-sm font-medium text-gray-600">
-              <Link to="/signup">
+              <Link to="/signup" onClick={handleSignupClick}>
                 <li className="cursor-pointer hover:text-blue-600 transition">
                   Signup
                 </li>

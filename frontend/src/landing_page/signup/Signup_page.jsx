@@ -24,8 +24,18 @@ const Signup_page = () => {
   const [otp, setOtp] = useState("");
   const [stage, setStage] = useState("form"); // form | verify | done
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
   const [agreed, setAgreed] = useState(false);
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      setIsLoggedIn(true);
+      toast.error("You are already Logged in. Please Logout first", {
+        icon: "❌",
+      });
+    }
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -33,6 +43,10 @@ const Signup_page = () => {
   };
 
   const handleSend = async (data) => {
+    if (isLoggedIn) {
+      toast("You are already Logged in. Please Logout first");
+      return;
+    }
     if (!agreed) {
       toast.error("You must agree to the Terms & Privacy to proceed");
       return;
@@ -67,6 +81,11 @@ const Signup_page = () => {
 
   return (
     <div className="max-w-md mx-auto  p-6 bg-white rounded-lg shadow my-20">
+      {isLoggedIn && (
+        <div className="mb-4 text-center text-red-600 text-base font-semibold">
+          You are already Logged in. Please Logout first.
+        </div>
+      )}
       {stage === "form" && (
         <>
           <form onSubmit={handleSubmit(handleSend)} className="space-y-4">
@@ -79,6 +98,7 @@ const Signup_page = () => {
                 value={form.name}
                 onChange={handleChange}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300"
+                disabled={isLoggedIn}
               />
               {errors.name && (
                 <p className="text-red-600 text-xs mt-1">
@@ -100,6 +120,7 @@ const Signup_page = () => {
                 value={form.email}
                 onChange={handleChange}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300"
+                disabled={isLoggedIn}
               />
               {errors.email && (
                 <p className="text-red-600 text-xs mt-1">
@@ -123,6 +144,7 @@ const Signup_page = () => {
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300"
                 maxLength={10}
                 inputMode="numeric"
+                disabled={isLoggedIn}
               />
               {errors.phone && (
                 <p className="text-red-600 text-xs mt-1">
@@ -141,6 +163,7 @@ const Signup_page = () => {
                 value={form.password}
                 onChange={handleChange}
                 className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300"
+                disabled={isLoggedIn}
               />
               {errors.password && (
                 <p className="text-red-600 text-xs mt-1">
@@ -156,6 +179,7 @@ const Signup_page = () => {
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
                 className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                disabled={isLoggedIn}
               />
               <label htmlFor="agree" className="text-sm text-gray-700">
                 By proceeding, you agree to the EquityIQ{" "}
@@ -175,14 +199,18 @@ const Signup_page = () => {
             <div className="flex items-center">
               <button
                 type="submit"
-                disabled={isSubmitting || !agreed}
+                disabled={isSubmitting || !agreed || isLoggedIn}
                 className={`px-4 py-2 rounded-md text-white ${
-                  isSubmitting || !agreed
+                  isSubmitting || !agreed || isLoggedIn
                     ? "bg-blue-300 cursor-not-allowed"
                     : "bg-blue-600 hover:bg-blue-700"
                 }`}
               >
-                {isSubmitting ? "Sending..." : "Send OTP"}
+                {isLoggedIn
+                  ? "Already logged in"
+                  : isSubmitting
+                  ? "Sending..."
+                  : "Send OTP"}
               </button>
             </div>
           </form>
