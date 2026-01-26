@@ -97,7 +97,11 @@ export const verifyPasswordOtp = async (req, res) => {
 import User from "../models/User.model.js";
 import PendingUser from "../models/PendingUser.model.js";
 import bcrypt from "bcryptjs";
-import { sendAddMoneyEmail, sendOtpEmail, sendWelcomeEmail } from "../config/mailer.js";
+import {
+  sendAddMoneyEmail,
+  sendOtpEmail,
+  sendWelcomeEmail,
+} from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
@@ -432,6 +436,7 @@ export const login = async (req, res) => {
         phone: user.phone,
         isEmailVerified: user.isEmailVerified,
         avatarUrl: user.avatarUrl,
+        accountBalance: user.accountBalance ?? 0,
       },
     });
   } catch (error) {

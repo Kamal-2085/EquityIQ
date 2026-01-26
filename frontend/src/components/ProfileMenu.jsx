@@ -49,7 +49,7 @@ const ProfileMenu = ({
         >
           <span>Account Balance</span>
           <span className="text-gray-900 font-medium">
-            ₹{(user?.accountBalance ?? 0).toLocaleString()}
+            ₹{(user?.accountBalance || 0).toLocaleString()}
           </span>
         </Link>
         <button
