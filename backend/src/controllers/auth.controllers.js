@@ -1,7 +1,103 @@
+// Update user password (after OTP verification)
+export const updatePassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password are required" });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    await user.save();
+    return res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+// Send password reset OTP
+export const sendPasswordOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+    user.otpHash = otpHash;
+    user.otpExpires = otpExpires;
+    await user.save();
+    try {
+      await sendOtpEmail({ to: user.email, name: user.name, otp });
+      return res
+        .status(200)
+        .json({ message: "OTP sent to email.", otpSent: true });
+    } catch (mailError) {
+      console.error("Password OTP email send failed:", mailError);
+      const response = {
+        message: "Failed to send OTP email. Please try again later.",
+        otpSent: false,
+      };
+      if (process.env.NODE_ENV !== "production") {
+        response.otpPreview = otp;
+      }
+      return res.status(200).json(response);
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Verify password reset OTP
+export const verifyPasswordOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (!user.otpHash || !user.otpExpires) {
+      return res
+        .status(400)
+        .json({ message: "OTP not found. Please request a new one." });
+    }
+    if (Date.now() > user.otpExpires.getTime()) {
+      return res
+        .status(400)
+        .json({ message: "OTP expired. Please request a new one." });
+    }
+    const isMatch = await bcrypt.compare(String(otp).trim(), user.otpHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid OTP" });
+    }
+    user.otpHash = null;
+    user.otpExpires = null;
+    await user.save();
+    return res.status(200).json({ verified: true });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
 import User from "../models/User.model.js";
 import PendingUser from "../models/PendingUser.model.js";
 import bcrypt from "bcryptjs";
-import { sendAddMoneyEmail, sendOtpEmail } from "../config/mailer.js";
+import { sendAddMoneyEmail, sendOtpEmail, sendWelcomeEmail } from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
@@ -276,6 +372,13 @@ export const verifyEmailOtp = async (req, res) => {
     }
 
     await PendingUser.deleteOne({ email: normalizedEmail });
+
+    // Send welcome email after successful signup verification
+    try {
+      await sendWelcomeEmail({ to: user.email, name: user.name });
+    } catch (err) {
+      console.error("Failed to send welcome email:", err);
+    }
 
     res.status(200).json({
       message: "Email verified successfully",

@@ -1,3 +1,32 @@
+export const sendWelcomeEmail = async ({ to, name }) => {
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = process.env.SMTP_REPLY_TO;
+
+  const subject = `Welcome to EquityIQ!`;
+  const text = `Hi ${name},\n\nWelcome to EquityIQ! Your account has been successfully created, and you’re all set to begin your investing journey with us.\n\nHere’s what you can do next:\n\n* Secure your account by completing KYC\n* Add funds to start investing\n* Explore stocks, insights, and market trends\n\nWe’re excited to have you on board and are here to help at every step.\nIf you have any questions, feel free to reach out to us anytime.\n\nHappy investing,\nTeam EquityIQ`;
+  const html = `
+    <p>Hi ${name},</p>
+    <p>Welcome to <strong>EquityIQ</strong>! 🎉<br />Your account has been successfully created, and you’re all set to begin your investing journey with us.</p>
+    <p><strong>Here’s what you can do next:</strong></p>
+    <ul>
+      <li>🔐 Secure your account by completing KYC</li>
+      <li>💰 Add funds to start investing</li>
+      <li>📊 Explore stocks, insights, and market trends</li>
+    </ul>
+    <p>We’re excited to have you on board and are here to help at every step.<br />If you have any questions, feel free to reach out to us anytime.</p>
+    <p>Happy investing,<br />Team EquityIQ</p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    ...(replyTo ? { replyTo } : {}),
+  });
+};
 import nodemailer from "nodemailer";
 
 const getTransporter = () => {

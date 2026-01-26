@@ -67,7 +67,6 @@ const Right2 = ({ onBack, amount }) => {
         } catch (err) {
           console.error("Failed to update local account balance:", err);
         }
-        toast.success("Payment confirmed and balance updated");
         navigate("/");
       },
       onError: () => {

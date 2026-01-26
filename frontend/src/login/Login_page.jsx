@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const Login_page = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,6 +92,13 @@ const Login_page = () => {
             {isSubmitting ? "Logging in..." : "Login"}
           </button>
         </form>
+        <div className="mt-4 text-center">
+          <div
+            className=" text-sm"
+          >
+            Forgot password? <Link to="/forgot-password" className="text-blue-600 hover:underline">click here</Link>
+          </div>
+        </div>
       </div>
     </section>
   );

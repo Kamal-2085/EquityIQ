@@ -27,13 +27,12 @@ const Signup_page = () => {
   const [agreed, setAgreed] = useState(false);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       setIsLoggedIn(true);
-      toast.error("You are already Logged in. Please Logout first", {
-        icon: "❌",
-      });
+      toast.error("You are already Logged in. Please Logout first");
     }
   }, []);
 
@@ -58,7 +57,7 @@ const Signup_page = () => {
         setStage("verify");
         if (data.user) setUser(data.user);
       },
-      successMessage: "OTP sent to your email",
+      successMessage: "OTP sent successfully",
     });
     return res;
   };
@@ -71,10 +70,14 @@ const Signup_page = () => {
       onSuccess: (data) => {
         setStage("done");
         if (data.user) setUser(data.user);
-        // Navigate to homepage after short delay
+        // Only show one toast
+        toast.dismiss();
+        toast.success("User registered successfully", {
+          id: "otp-verify",
+        });
         setTimeout(() => navigate("/"), 1500);
       },
-      successMessage: "Email verified",
+      successMessage: undefined, // Prevent default toast
     });
     return res;
   };
