@@ -35,6 +35,10 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    accountBalance: {
+      type: Number,
+      default: 0,
+    },
     avatarUrl: {
       type: String,
       default: null,

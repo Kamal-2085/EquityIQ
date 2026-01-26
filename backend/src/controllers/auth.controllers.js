@@ -188,19 +188,32 @@ export const verifyPaymentOtp = async (req, res) => {
     user.otpExpires = null;
     await user.save();
 
+    // Parse amount and update user's account balance
+    const parsedAmount = Number(amount) || 0;
+    if (parsedAmount > 0) {
+      user.accountBalance = (user.accountBalance || 0) + parsedAmount;
+      try {
+        await user.save();
+      } catch (saveError) {
+        console.error("Failed to update account balance:", saveError);
+      }
+    }
+
     const dateTime = new Date().toLocaleString();
     try {
       await sendAddMoneyEmail({
         to: user.email,
         name: user.name,
-        amount: amount || 0,
+        amount: parsedAmount,
         dateTime,
       });
     } catch (mailError) {
       console.error("Add money email send failed:", mailError);
     }
 
-    return res.status(200).json({ message: "OTP verified" });
+    return res
+      .status(200)
+      .json({ message: "OTP verified", accountBalance: user.accountBalance });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }

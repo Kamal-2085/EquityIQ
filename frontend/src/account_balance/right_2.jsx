@@ -48,9 +48,26 @@ const Right2 = ({ onBack, amount }) => {
     await verifyOtp({
       endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
       payload: { email, otp: normalizedOtp, amount },
-      successMessage: "OTP verified Payment will be coinfrmed shortly",
-      onSuccess: () => {
+      successMessage: "OTP verified. Payment will be confirmed shortly",
+      onSuccess: (resData) => {
         setOtp("");
+        // If backend returned updated balance, update stored user and notify app
+        try {
+          const raw = localStorage.getItem("equityiq_user");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (resData?.accountBalance != null) {
+              parsed.user = parsed.user || {};
+              parsed.user.accountBalance = resData.accountBalance;
+              localStorage.setItem("equityiq_user", JSON.stringify(parsed));
+              // broadcast update so other components refresh
+              window.dispatchEvent(new Event("equityiq_user_updated"));
+            }
+          }
+        } catch (err) {
+          console.error("Failed to update local account balance:", err);
+        }
+        toast.success("Payment confirmed and balance updated");
         navigate("/");
       },
       onError: () => {

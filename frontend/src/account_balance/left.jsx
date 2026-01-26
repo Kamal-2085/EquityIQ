@@ -1,6 +1,28 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 const Left = () => {
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    const readBalance = () => {
+      try {
+        const raw = localStorage.getItem("equityiq_user");
+        if (!raw) return setBalance(0);
+        const parsed = JSON.parse(raw);
+        const val = parsed?.user?.accountBalance ?? 0;
+        setBalance(Number(val) || 0);
+      } catch (err) {
+        setBalance(0);
+      }
+    };
+
+    readBalance();
+
+    const handler = () => readBalance();
+    window.addEventListener("equityiq_user_updated", handler);
+    return () => window.removeEventListener("equityiq_user_updated", handler);
+  }, []);
+
   return (
     <div className="w-full space-y-6">
       <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -9,14 +31,16 @@ const Left = () => {
             Stocks, F&amp;O balance
           </p>
           <div className="mt-2 text-3xl font-semibold text-gray-900">
-            ₹0
+            ₹{balance.toLocaleString()}
           </div>
         </div>
         <div className="border-t border-dashed border-gray-200" />
         <div className="px-6 py-5">
           <div className="flex items-center justify-between text-sm text-gray-700">
             <span>Cash</span>
-            <span className="font-medium text-gray-900">₹0</span>
+            <span className="font-medium text-gray-900">
+              ₹{balance.toLocaleString()}
+            </span>
           </div>
         </div>
       </div>
