@@ -495,3 +495,29 @@ export const updateProfileImage = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// Get user and verify bank details by mobile only
+export const verifyBankDetails = async (req, res) => {
+  try {
+    const { mobile, accountHolderName } = req.body;
+    if (!mobile || !accountHolderName) {
+      return res.status(400).json({ toast: "All fields are required." });
+    }
+    const user = await User.findOne({ phone: mobile });
+    if (!user) {
+      return res.status(404).json({ toast: "User not found." });
+    }
+    if (
+      mobile !== user.phone ||
+      accountHolderName.trim().toLowerCase() !== user.name.trim().toLowerCase()
+    ) {
+      return res.status(400).json({
+        toast:
+          "The details you entered do not match your registered information.",
+      });
+    }
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ toast: "Server error" });
+  }
+};

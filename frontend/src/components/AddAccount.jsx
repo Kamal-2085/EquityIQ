@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
+import axios from "axios";
+import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
 import img48 from "../assets/img48.webp";
 import img49 from "../assets/img49.webp";
@@ -15,13 +17,40 @@ const banks = [
 ];
 
 const AddAccount = () => {
+  const [showOtp, setShowOtp] = useState(false);
+  // Email state removed, not needed for mobile-only verification
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm();
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
+    // If OTP is not shown, verify details before showing OTP input
+    if (!showOtp) {
+      try {
+        const res = await axios.post(
+          "http://localhost:5000/api/auth/verify-bank-details",
+          {
+            mobile: data.mobileNumber,
+            accountHolderName: data.accountHolderName,
+          },
+        );
+        if (res.data && res.data.success) {
+          toast.success("OTP sent successfully");
+          setShowOtp(true);
+          return;
+        }
+      } catch (err) {
+        if (err.response && err.response.data && err.response.data.toast) {
+          toast.error(err.response.data.toast);
+        } else {
+          toast.error("Error verifying user details. Please try again.");
+        }
+        return;
+      }
+    }
+    // Submit form with OTP
     console.log("Bank account details:", data);
   };
 
@@ -31,6 +60,7 @@ const AddAccount = () => {
         onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-lg bg-white rounded-2xl border border-gray-200 shadow-sm p-6"
       >
+        {/* Email input removed, not needed for mobile-only verification */}
         <h2 className="text-xl font-semibold text-gray-900">
           Add Your Bank Account Details
         </h2>
@@ -133,11 +163,28 @@ const AddAccount = () => {
           )}
         </div>
 
+        {showOtp && (
+          <div className="mt-5">
+            <label className="block text-sm font-medium text-gray-700">
+              OTP
+            </label>
+            <input
+              {...register("otp", { required: true })}
+              type="text"
+              placeholder="Enter OTP"
+              className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm outline-none focus:border-blue-500"
+            />
+            {errors.otp && (
+              <p className="text-red-500 text-sm mt-1">OTP is required</p>
+            )}
+          </div>
+        )}
+
         <button
           type="submit"
           className="mt-6 w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700"
         >
-          Send OTP
+          {showOtp ? "Verify OTP" : "Send OTP"}
         </button>
       </form>
     </section>

@@ -9,6 +9,7 @@ import {
   sendPasswordOtp,
   verifyPasswordOtp,
   updatePassword,
+  verifyBankDetails,
 } from "../controllers/auth.controllers.js";
 import upload from "../middleware/multer.js";
 
@@ -23,5 +24,6 @@ router.put("/profile-image", upload.single("image"), updateProfileImage);
 router.post("/send-password-otp", sendPasswordOtp);
 router.post("/verify-password-otp", verifyPasswordOtp);
 router.post("/update-password", updatePassword);
+router.post("/verify-bank-details", verifyBankDetails);
 
 export default router;
