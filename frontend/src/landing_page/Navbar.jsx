@@ -50,7 +50,7 @@ const Navbar = () => {
   }, [menubar]);
 
   useEffect(() => {
-    const loadUser = () => {
+    const fetchAndSetUser = async () => {
       const raw = localStorage.getItem("equityiq_user");
       if (!raw) {
         setUser(null);
@@ -65,14 +65,33 @@ const Navbar = () => {
           setUser(null);
           return;
         }
+        // Fetch latest user data from backend
+        const res = await fetch(
+          `http://localhost:5000/api/auth/me?email=${encodeURIComponent(
+            storedUser.email,
+          )}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            setUser(data.user);
+            // Update localStorage with latest user info
+            localStorage.setItem(
+              "equityiq_user",
+              JSON.stringify({ user: data.user, expiresAt }),
+            );
+            return;
+          }
+        }
+        // fallback to stored user if fetch fails
         setUser(storedUser);
       } catch {
         localStorage.removeItem("equityiq_user");
         setUser(null);
       }
     };
-    loadUser();
-    const handleUserUpdate = () => loadUser();
+    fetchAndSetUser();
+    const handleUserUpdate = () => fetchAndSetUser();
     window.addEventListener("equityiq_user_updated", handleUserUpdate);
     return () =>
       window.removeEventListener("equityiq_user_updated", handleUserUpdate);
