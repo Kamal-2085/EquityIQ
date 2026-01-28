@@ -6,6 +6,9 @@ import useEmailOtp from "../hooks/useEmailOtp.js";
 import { useNavigate } from "react-router-dom";
 const Right2 = ({ onBack, amount }) => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [txnIdRequested, setTxnIdRequested] = useState(false);
+  const [txnId, setTxnId] = useState("");
+  const [txnIdError, setTxnIdError] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -18,18 +21,52 @@ const Right2 = ({ onBack, amount }) => {
     onBack?.();
   };
 
-  const handleSendOtp = async () => {
+  const handleTxnIdRequest = () => {
+    setTxnIdRequested(true);
+  };
+
+  const handleSubmitTxnId = async () => {
     const stored = JSON.parse(localStorage.getItem("equityiq_user") || "{}");
     const email = stored?.user?.email;
     if (!email) {
       toast.error("Please login to continue");
       return;
     }
-    await sendOtp({
-      endpoint: "http://localhost:5000/api/auth/send-payment-otp",
-      payload: { email },
-      onSuccess: () => setOtpSent(true),
-    });
+    const normalizedTxnId = txnId.trim();
+    // UPI Transaction IDs should be only numeric and at least 8 digits
+    const validTxnId = /^\d{8,}$/;
+    if (!validTxnId.test(normalizedTxnId)) {
+      setTxnIdError("Enter a valid UPI Transaction ID (8+ digits)");
+      return;
+    }
+    setTxnIdError("");
+    try {
+      // Store transaction in backend
+      const response = await fetch(
+        "http://localhost:5000/api/auth/submit-upi-transaction",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, txnId: normalizedTxnId, amount }),
+        },
+      );
+      const data = await response.json();
+      if (response.ok) {
+        // Now send OTP to email
+        await sendOtp({
+          endpoint: "http://localhost:5000/api/auth/send-payment-otp",
+          payload: { email },
+          onSuccess: () => setOtpSent(true),
+          successMessage: "OTP sent to your email.",
+        });
+      } else {
+        setTxnIdError(data.message || "Failed to submit transaction ID");
+        toast.error(data.message || "Failed to submit transaction ID");
+      }
+    } catch (err) {
+      setTxnIdError("Server error. Please try again later.");
+      toast.error("Server error. Please try again later.");
+    }
   };
 
   const handleVerifyOtp = async () => {
@@ -49,24 +86,8 @@ const Right2 = ({ onBack, amount }) => {
       endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
       payload: { email, otp: normalizedOtp, amount },
       successMessage: "OTP verified. Payment will be confirmed shortly",
-      onSuccess: (resData) => {
+      onSuccess: () => {
         setOtp("");
-        // If backend returned updated balance, update stored user and notify app
-        try {
-          const raw = localStorage.getItem("equityiq_user");
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (resData?.accountBalance != null) {
-              parsed.user = parsed.user || {};
-              parsed.user.accountBalance = resData.accountBalance;
-              localStorage.setItem("equityiq_user", JSON.stringify(parsed));
-              // broadcast update so other components refresh
-              window.dispatchEvent(new Event("equityiq_user_updated"));
-            }
-          }
-        } catch (err) {
-          console.error("Failed to update local account balance:", err);
-        }
         navigate("/");
       },
       onError: () => {
@@ -110,25 +131,46 @@ const Right2 = ({ onBack, amount }) => {
       <div className="border-t border-gray-200" />
 
       <div className="px-6 py-4">
-        {otpSent ? (
-          <div>
-            <label className="block text-sm font-semibold text-gray-700">
-              Enter OTP
-            </label>
-            <input
-              type="text"
-              value={otp}
-              onChange={(event) =>
-                setOtp(event.target.value.replace(/\D/g, ""))
-              }
-              maxLength={6}
-              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-center tracking-widest outline-none focus:border-emerald-500"
-              placeholder="••••••"
-            />
-            {otpError && (
-              <p className="mt-2 text-sm text-red-500">{otpError}</p>
-            )}
-          </div>
+        {txnIdRequested ? (
+          otpSent ? (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700">
+                Enter OTP
+              </label>
+              <input
+                type="text"
+                value={otp}
+                onChange={(event) =>
+                  setOtp(event.target.value.replace(/\D/g, ""))
+                }
+                maxLength={6}
+                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-center tracking-widest outline-none focus:border-emerald-500"
+                placeholder="••••••"
+              />
+              {otpError && (
+                <p className="mt-2 text-sm text-red-500">{otpError}</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-semibold text-gray-700">
+                Enter UPI Transaction ID
+              </label>
+              <input
+                type="text"
+                value={txnId}
+                onChange={(event) =>
+                  setTxnId(event.target.value.replace(/\D/g, ""))
+                }
+                maxLength={30}
+                className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-center tracking-widest outline-none focus:border-emerald-500"
+                placeholder="Transaction ID"
+              />
+              {txnIdError && (
+                <p className="mt-2 text-sm text-red-500">{txnIdError}</p>
+              )}
+            </div>
+          )
         ) : (
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full text-white flex items-center justify-center">
@@ -144,20 +186,36 @@ const Right2 = ({ onBack, amount }) => {
       <div className="border-t border-gray-200" />
 
       <div className="px-6 py-3 text-center text-xs text-gray-500">
-        <button
-          type="button"
-          onClick={otpSent ? handleVerifyOtp : handleSendOtp}
-          disabled={isSubmitting}
-          className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer disabled:opacity-60"
-        >
-          {isSubmitting
-            ? otpSent
-              ? "Verifying OTP..."
-              : "Sending OTP..."
-            : otpSent
-            ? "Verify OTP"
-            : "I've Paid"}
-        </button>
+        {txnIdRequested ? (
+          otpSent ? (
+            <button
+              type="button"
+              onClick={handleVerifyOtp}
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer disabled:opacity-60"
+            >
+              {isSubmitting ? "Verifying OTP..." : "Verify OTP"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmitTxnId}
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer disabled:opacity-60"
+            >
+              {isSubmitting ? "Submitting..." : "Submit Transaction ID"}
+            </button>
+          )
+        ) : (
+          <button
+            type="button"
+            onClick={handleTxnIdRequest}
+            disabled={isSubmitting}
+            className="w-full rounded-xl bg-emerald-500 py-3.5 text-white text-sm font-semibold hover:bg-emerald-600 cursor-pointer disabled:opacity-60"
+          >
+            {isSubmitting ? "Processing..." : "I've Paid"}
+          </button>
+        )}
       </div>
 
       {showCancelConfirm && (

@@ -10,6 +10,8 @@ import {
   verifyPasswordOtp,
   updatePassword,
   verifyBankDetails,
+  verifyBankOtp,
+  submitUpiTransaction,
 } from "../controllers/auth.controllers.js";
 import upload from "../middleware/multer.js";
 
@@ -25,5 +27,8 @@ router.post("/send-password-otp", sendPasswordOtp);
 router.post("/verify-password-otp", verifyPasswordOtp);
 router.post("/update-password", updatePassword);
 router.post("/verify-bank-details", verifyBankDetails);
+
+router.post("/submit-upi-transaction", submitUpiTransaction);
+router.post("/verify-bank-otp", verifyBankOtp);
 
 export default router;

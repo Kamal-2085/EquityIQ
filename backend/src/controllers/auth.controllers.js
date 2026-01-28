@@ -1,3 +1,40 @@
+// Store UPI Transaction ID for user
+export const submitUpiTransaction = async (req, res) => {
+  try {
+    const { email, txnId, amount } = req.body;
+    if (!email || !txnId || !amount) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+    const normalizedTxnId = String(txnId).trim().toLowerCase();
+    // Check if txnId exists for any user (case-insensitive, trimmed)
+    const existing = await User.findOne({
+      transactionHistory: {
+        $elemMatch: {
+          txnId: { $regex: `^${normalizedTxnId}$`, $options: "i" },
+        },
+      },
+    });
+    if (existing) {
+      return res.status(400).json({ message: "Payment can't be verified" });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+    user.transactionHistory = user.transactionHistory || [];
+    user.transactionHistory.push({
+      txnId: normalizedTxnId,
+      amount,
+      date: new Date(),
+    });
+    await user.save();
+    return res
+      .status(200)
+      .json({ message: "Transaction recorded successfully." });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
 // Update user password (after OTP verification)
 export const updatePassword = async (req, res) => {
   try {
@@ -97,11 +134,7 @@ export const verifyPasswordOtp = async (req, res) => {
 import User from "../models/User.model.js";
 import PendingUser from "../models/PendingUser.model.js";
 import bcrypt from "bcryptjs";
-import {
-  sendAddMoneyEmail,
-  sendOtpEmail,
-  sendWelcomeEmail,
-} from "../config/mailer.js";
+import { sendOtpEmail, sendAddMoneyEmail } from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
@@ -516,6 +549,55 @@ export const verifyBankDetails = async (req, res) => {
           "The details you entered do not match your registered information.",
       });
     }
+    // Generate OTP and send to user's email
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    user.otpHash = otpHash;
+    user.otpExpires = otpExpires;
+    await user.save();
+    await sendOtpEmail({ to: user.email, name: user.name, otp });
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ toast: "Server error" });
+  }
+};
+
+// Verify OTP for bank details using mobile and otp
+export const verifyBankOtp = async (req, res) => {
+  try {
+    const { mobile, otp, bankName, accountHolderName, accountNumber } =
+      req.body;
+    if (!mobile || !otp) {
+      return res.status(400).json({ toast: "Mobile and OTP are required." });
+    }
+    const user = await User.findOne({ phone: mobile });
+    if (!user) {
+      return res.status(404).json({ toast: "User not found." });
+    }
+    if (!user.otpHash || !user.otpExpires) {
+      return res
+        .status(400)
+        .json({ toast: "OTP not found. Please request a new one." });
+    }
+    if (Date.now() > user.otpExpires.getTime()) {
+      return res
+        .status(400)
+        .json({ toast: "OTP expired. Please request a new one." });
+    }
+    const isMatch = await bcrypt.compare(String(otp).trim(), user.otpHash);
+    if (!isMatch) {
+      return res.status(400).json({ toast: "Invalid OTP." });
+    }
+    user.otpHash = null;
+    user.otpExpires = null;
+    await user.save();
+
+    // Send confirmation email to user
+    const last4 = accountNumber ? String(accountNumber).slice(-4) : "XXXX";
+    const message = `Hi ${user.name},\n\nYour bank account has been **successfully added** to your **EquityIQ** account ✅\n\n**Bank details:**\n\n* **Bank:** ${bankName || "-"}\n* **Account holder name:** ${accountHolderName || user.name}\n* **Account number:** XXXX${last4}\n\nYou can now use this bank account for withdrawals on EquityIQ.\n\nIf you didn’t make this change or notice anything unusual, please contact us immediately.\n\nThanks for choosing EquityIQ,\n**Team EquityIQ**`;
+    await sendOtpEmail({ to: user.email, name: user.name, otp: message });
+
     return res.status(200).json({ success: true });
   } catch (error) {
     return res.status(500).json({ toast: "Server error" });

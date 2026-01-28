@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
+import { useNavigate } from "react-router-dom";
 import img48 from "../assets/img48.webp";
 import img49 from "../assets/img49.webp";
 import img50 from "../assets/img50.webp";
@@ -18,6 +19,9 @@ const banks = [
 
 const AddAccount = () => {
   const [showOtp, setShowOtp] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const navigate = useNavigate();
   // Email state removed, not needed for mobile-only verification
   const {
     register,
@@ -26,8 +30,8 @@ const AddAccount = () => {
   } = useForm();
 
   const onSubmit = async (data) => {
-    // If OTP is not shown, verify details before showing OTP input
     if (!showOtp) {
+      setSendingOtp(true);
       try {
         const res = await axios.post(
           "http://localhost:5000/api/auth/verify-bank-details",
@@ -39,7 +43,6 @@ const AddAccount = () => {
         if (res.data && res.data.success) {
           toast.success("OTP sent successfully");
           setShowOtp(true);
-          return;
         }
       } catch (err) {
         if (err.response && err.response.data && err.response.data.toast) {
@@ -47,11 +50,36 @@ const AddAccount = () => {
         } else {
           toast.error("Error verifying user details. Please try again.");
         }
+      }
+      setSendingOtp(false);
+      return;
+    }
+    // OTP is shown, so verify OTP
+    setVerifyingOtp(true);
+    try {
+      const res = await axios.post(
+        "http://localhost:5000/api/auth/verify-bank-otp",
+        {
+          mobile: data.mobileNumber,
+          otp: data.otp,
+          bankName: data.bank,
+          accountHolderName: data.accountHolderName,
+          accountNumber: data.accountNumber,
+        },
+      );
+      if (res.data && res.data.success) {
+        toast.success("Bank Account Added Successfully");
+        navigate("/");
         return;
       }
+    } catch (err) {
+      if (err.response && err.response.data && err.response.data.toast) {
+        toast.error(err.response.data.toast);
+      } else {
+        toast.error("Error verifying OTP. Please try again.");
+      }
     }
-    // Submit form with OTP
-    console.log("Bank account details:", data);
+    setVerifyingOtp(false);
   };
 
   return (
@@ -182,13 +210,19 @@ const AddAccount = () => {
 
         <button
           type="submit"
-          className="mt-6 w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          className="mt-6 w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={(sendingOtp && !showOtp) || verifyingOtp}
         >
-          {showOtp ? "Verify OTP" : "Send OTP"}
+          {showOtp
+            ? verifyingOtp
+              ? "Verifying OTP..."
+              : "Verify OTP"
+            : sendingOtp
+            ? "Sending OTP..."
+            : "Send OTP"}
         </button>
       </form>
     </section>
   );
 };
-
 export default AddAccount;
