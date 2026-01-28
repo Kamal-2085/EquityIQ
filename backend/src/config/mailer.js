@@ -1,3 +1,44 @@
+// Send withdrawal request email
+export const sendWithdrawalRequestEmail = async ({
+  to,
+  name,
+  amount,
+  bankName,
+  last4,
+  dateTime,
+}) => {
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = process.env.SMTP_REPLY_TO;
+
+  const subject = "We’ve received your withdrawal request";
+  const formattedAmount = `₹${amount}`;
+  const text = `Hi ${name},\n\nWe’ve received your withdrawal request from your EquityIQ wallet.\n\nWithdrawal details:\n\n* Amount: ${formattedAmount}\n* Bank: ${bankName} (XXXX${last4})\n* Request time: ${dateTime}\n* Status: Processing\n\nYour request is currently being processed. Withdrawals are usually completed within 1–3 working days, depending on bank processing timelines.\n\nOnce the amount is successfully transferred to your bank account, we’ll notify you via email.\n\nIf you didn’t initiate this request or notice anything unusual, please contact us immediately.\n\nThanks for using EquityIQ,\nTeam EquityIQ`;
+  const html = `
+    <p>Hi ${name},</p>
+    <p>We’ve received your <strong>withdrawal request</strong> from your <strong>EquityIQ wallet</strong>.</p>
+    <p><strong>Withdrawal details:</strong></p>
+    <ul>
+      <li><strong>Amount:</strong> ${formattedAmount}</li>
+      <li><strong>Bank:</strong> ${bankName} (XXXX${last4})</li>
+      <li><strong>Request time:</strong> ${dateTime}</li>
+      <li><strong>Status:</strong> Processing</li>
+    </ul>
+    <p>Your request is currently being processed. Withdrawals are usually completed within <strong>1–3 working days</strong>, depending on bank processing timelines.</p>
+    <p>Once the amount is successfully transferred to your bank account, we’ll notify you via email.</p>
+    <p>If you didn’t initiate this request or notice anything unusual, please contact us immediately.</p>
+    <p>Thanks for using EquityIQ,<br /><strong>Team EquityIQ</strong></p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    ...(replyTo ? { replyTo } : {}),
+  });
+};
 export const sendBankAccountAddedEmail = async ({
   to,
   name,

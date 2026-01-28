@@ -9,7 +9,7 @@ import img50 from "../assets/img50.webp";
 import img51 from "../assets/img51.webp";
 import img52 from "../assets/img52.webp";
 
-const banks = [
+export const banks = [
   { name: "State Bank of India", code: "SBI", logo: img48 },
   { name: "HDFC Bank", code: "HDFC", logo: img49 },
   { name: "ICICI Bank", code: "ICICI", logo: img50 },

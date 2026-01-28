@@ -138,6 +138,7 @@ import {
   sendOtpEmail,
   sendAddMoneyEmail,
   sendBankAccountAddedEmail,
+  sendWithdrawalRequestEmail,
 } from "../config/mailer.js";
 import { sendWelcomeEmail } from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
@@ -269,11 +270,21 @@ export const sendPaymentOtp = async (req, res) => {
     user.otpExpires = otpExpires;
     await user.save();
 
+    // Debug log for OTP
+    console.log("[OTP DEBUG] Payment OTP generated:", {
+      email: user.email,
+      otp,
+      otpHash,
+      otpExpires,
+      now: new Date(),
+    });
+
     try {
       await sendOtpEmail({ to: user.email, name: user.name, otp });
       return res.status(200).json({
         message: "OTP sent to email.",
         otpSent: true,
+        ...(process.env.NODE_ENV !== "production" ? { otpPreview: otp } : {}),
       });
     } catch (mailError) {
       console.error("Payment OTP email send failed:", mailError);
@@ -317,19 +328,29 @@ export const verifyPaymentOtp = async (req, res) => {
         .json({ message: "OTP expired. Please request a new one." });
     }
 
+    // Debug log for OTP verification
+    console.log("[OTP DEBUG] Verifying OTP:", {
+      email,
+      enteredOtp: normalizedOtp,
+      otpHash: user.otpHash,
+      otpExpires: user.otpExpires,
+      now: new Date(),
+    });
     const isMatch = await bcrypt.compare(normalizedOtp, user.otpHash);
     if (!isMatch) {
+      console.log("[OTP DEBUG] OTP mismatch!");
       return res.status(400).json({ message: "Invalid OTP" });
     }
+    console.log("[OTP DEBUG] OTP verified successfully!");
 
     user.otpHash = null;
     user.otpExpires = null;
     await user.save();
 
-    // Parse amount and update user's account balance
+    // Parse amount and update user's account balance (for withdrawal, you may want to deduct instead)
     const parsedAmount = Number(amount) || 0;
     if (parsedAmount > 0) {
-      user.accountBalance = (user.accountBalance || 0) + parsedAmount;
+      user.accountBalance = (user.accountBalance || 0) - parsedAmount;
       try {
         await user.save();
       } catch (saveError) {
@@ -337,16 +358,27 @@ export const verifyPaymentOtp = async (req, res) => {
       }
     }
 
+    // Send withdrawal request email
     const dateTime = new Date().toLocaleString();
+    let bankName = "-",
+      last4 = "XXXX";
+    if (user.bankAccount) {
+      bankName = user.bankAccount.bankName || "-";
+      last4 = user.bankAccount.accountNumber
+        ? String(user.bankAccount.accountNumber).slice(-4)
+        : "XXXX";
+    }
     try {
-      await sendAddMoneyEmail({
+      await sendWithdrawalRequestEmail({
         to: user.email,
         name: user.name,
         amount: parsedAmount,
+        bankName,
+        last4,
         dateTime,
       });
     } catch (mailError) {
-      console.error("Add money email send failed:", mailError);
+      console.error("Withdrawal request email send failed:", mailError);
     }
 
     return res
