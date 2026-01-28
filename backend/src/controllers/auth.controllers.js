@@ -134,7 +134,12 @@ export const verifyPasswordOtp = async (req, res) => {
 import User from "../models/User.model.js";
 import PendingUser from "../models/PendingUser.model.js";
 import bcrypt from "bcryptjs";
-import { sendOtpEmail, sendAddMoneyEmail } from "../config/mailer.js";
+import {
+  sendOtpEmail,
+  sendAddMoneyEmail,
+  sendBankAccountAddedEmail,
+} from "../config/mailer.js";
+import { sendWelcomeEmail } from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 
@@ -566,10 +571,15 @@ export const verifyBankDetails = async (req, res) => {
 // Verify OTP for bank details using mobile and otp
 export const verifyBankOtp = async (req, res) => {
   try {
-    const { mobile, otp, bankName, accountHolderName, accountNumber } =
+    const { mobile, otp, bankName, bankCode, accountNumber, ifscCode } =
       req.body;
     if (!mobile || !otp) {
       return res.status(400).json({ toast: "Mobile and OTP are required." });
+    }
+    if (!bankName || !bankCode || !accountNumber || !ifscCode) {
+      return res
+        .status(400)
+        .json({ toast: "All bank account fields are required." });
     }
     const user = await User.findOne({ phone: mobile });
     if (!user) {
@@ -591,15 +601,29 @@ export const verifyBankOtp = async (req, res) => {
     }
     user.otpHash = null;
     user.otpExpires = null;
+    // Save bank account details
+    user.bankAccount = {
+      bankName,
+      bankCode,
+      accountNumber,
+      ifsc: ifscCode,
+    };
     await user.save();
 
     // Send confirmation email to user
-    const last4 = accountNumber ? String(accountNumber).slice(-4) : "XXXX";
-    const message = `Hi ${user.name},\n\nYour bank account has been **successfully added** to your **EquityIQ** account ✅\n\n**Bank details:**\n\n* **Bank:** ${bankName || "-"}\n* **Account holder name:** ${accountHolderName || user.name}\n* **Account number:** XXXX${last4}\n\nYou can now use this bank account for withdrawals on EquityIQ.\n\nIf you didn’t make this change or notice anything unusual, please contact us immediately.\n\nThanks for choosing EquityIQ,\n**Team EquityIQ**`;
-    await sendOtpEmail({ to: user.email, name: user.name, otp: message });
+    await sendBankAccountAddedEmail({
+      to: user.email,
+      name: user.name,
+      bankName,
+      accountNumber,
+      ifsc: ifscCode,
+    });
 
     return res.status(200).json({ success: true });
   } catch (error) {
-    return res.status(500).json({ toast: "Server error" });
+    console.error("verifyBankOtp error:", error);
+    return res
+      .status(500)
+      .json({ toast: "Server error", error: error.message });
   }
 };

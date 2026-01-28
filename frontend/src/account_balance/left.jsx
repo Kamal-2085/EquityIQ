@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-
+import { Link } from "react-router-dom";
 const Left = () => {
   const [balance, setBalance] = useState(0);
 
@@ -49,10 +49,12 @@ const Left = () => {
         type="button"
         className="w-full rounded-2xl border border-gray-200 bg-white px-6 py-4 text-left flex items-center justify-between shadow-sm hover:border-gray-300"
       >
-        <span className="text-sm font-semibold text-gray-700">
-          All transactions
-        </span>
-        <span className="text-gray-400 text-xl leading-none">›</span>
+        <Link to="/add-account/transaction-history" className="w-full flex items-center justify-between">
+          <span className="text-sm font-semibold text-gray-700">
+            All transactions
+          </span>
+          <span className="text-gray-400 text-xl leading-none">›</span>
+        </Link>
       </button>
     </div>
   );

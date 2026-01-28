@@ -10,11 +10,11 @@ import img51 from "../assets/img51.webp";
 import img52 from "../assets/img52.webp";
 
 const banks = [
-  { name: "State Bank of India", logo: img48 },
-  { name: "HDFC Bank", logo: img49 },
-  { name: "ICICI Bank", logo: img50 },
-  { name: "Axis Bank", logo: img51 },
-  { name: "Kotak Mahindra Bank", logo: img52 },
+  { name: "State Bank of India", code: "SBI", logo: img48 },
+  { name: "HDFC Bank", code: "HDFC", logo: img49 },
+  { name: "ICICI Bank", code: "ICICI", logo: img50 },
+  { name: "Axis Bank", code: "AXIS", logo: img51 },
+  { name: "Kotak Mahindra Bank", code: "KOTAK", logo: img52 },
 ];
 
 const AddAccount = () => {
@@ -62,13 +62,15 @@ const AddAccount = () => {
         {
           mobile: data.mobileNumber,
           otp: data.otp,
-          bankName: data.bank,
-          accountHolderName: data.accountHolderName,
+          bankName: banks.find((b) => b.code === data.bankCode)?.name || "",
+          bankCode: data.bankCode,
+          accountHolderName: data.accountHolderName, // Only for verification, not storage
           accountNumber: data.accountNumber,
+          ifscCode: data.ifscCode,
         },
       );
       if (res.data && res.data.success) {
-        toast.success("Bank Account Added Successfully");
+        toast.success("Bank Account Verified Successfully");
         navigate("/");
         return;
       }
@@ -88,7 +90,7 @@ const AddAccount = () => {
         onSubmit={handleSubmit(onSubmit)}
         className="w-full max-w-lg bg-white rounded-2xl border border-gray-200 shadow-sm p-6"
       >
-        {/* Email input removed, not needed for mobile-only verification */}
+        {/* Account holder name is only used for verification, not storage */}
         <h2 className="text-xl font-semibold text-gray-900">
           Add Your Bank Account Details
         </h2>
@@ -100,13 +102,13 @@ const AddAccount = () => {
           <div className="mt-3 space-y-3">
             {banks.map((bank) => (
               <label
-                key={bank.name}
+                key={bank.code}
                 className="flex items-center gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer hover:border-blue-400"
               >
                 <input
                   type="radio"
-                  value={bank.name}
-                  {...register("bank", { required: true })}
+                  value={bank.code}
+                  {...register("bankCode", { required: true })}
                   className="h-4 w-4 text-blue-600"
                 />
                 <img

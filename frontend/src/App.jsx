@@ -27,6 +27,7 @@ import AccountPage from "./account_balance/account_page.jsx";
 import AddAccount from "./components/AddAccount.jsx";
 import Forgot_password_page from "./forgot_passwod/Forgot_password_page.jsx";
 import Update_user_password from "./forgot_passwod/Update_user_password.jsx";
+import Transaction_history_page from "./transaction_history/Transaction_history_page.jsx";
 const LandingLayout = () => (
   <>
     <Navbar />
@@ -59,6 +60,7 @@ const App = () => {
           <Route path="/account-balance" element={<AccountPage />} />
           <Route path="/add-account" element={<AddAccount />} />
           <Route path="/forgot-password" element={<Forgot_password_page />} />
+          <Route path="/add-account/transaction-history" element={<Transaction_history_page />} />
           <Route
             path="/forgot-password/update"
             element={<Update_user_password />}

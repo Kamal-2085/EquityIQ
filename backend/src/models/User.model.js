@@ -46,6 +46,13 @@ const userSchema = new mongoose.Schema(
         date: { type: Date, default: Date.now },
       },
     ],
+    bankAccount: {
+      // accountHolderName removed
+      accountNumber: { type: String },
+      ifsc: { type: String },
+      bankName: { type: String },
+      bankCode: { type: String }, // e.g. HDFC, SBI, ICICI
+    },
     avatarUrl: {
       type: String,
       default: null,

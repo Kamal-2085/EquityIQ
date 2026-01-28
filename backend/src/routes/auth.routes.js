@@ -25,7 +25,11 @@ router.get("/me", async (req, res) => {
     if (!email) return res.status(400).json({ message: "Email required" });
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ user });
+    // Ensure user.id is present for frontend compatibility
+    const userObj = user.toObject();
+    userObj.id = userObj._id;
+    delete userObj._id;
+    res.json({ user: userObj });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }

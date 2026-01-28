@@ -1,3 +1,40 @@
+export const sendBankAccountAddedEmail = async ({
+  to,
+  name,
+  bankName,
+  accountNumber,
+  ifsc,
+}) => {
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = process.env.SMTP_REPLY_TO;
+
+  const subject = "Bank account added to EquityIQ";
+  const last4 = accountNumber ? String(accountNumber).slice(-4) : "XXXX";
+  const text = `Hi ${name},\n\nYour bank account has been successfully added to your EquityIQ account ✅\n\nBank details:\n\n* Bank: ${bankName || "-"}\n* Account number: XXXX${last4}\n* IFSC: ${ifsc || "-"}\n\nYou can now use this bank account for adding funds and withdrawals on EquityIQ.\n\nIf you didn’t make this change or notice anything unusual, please contact us immediately.\n\nThanks for choosing EquityIQ,\nTeam EquityIQ`;
+  const html = `
+    <p>Hi ${name},</p>
+    <p>Your bank account has been <strong>successfully added</strong> to your <strong>EquityIQ</strong> account ✅</p>
+    <p><strong>Bank details:</strong></p>
+    <ul>
+      <li><strong>Bank:</strong> ${bankName || "-"}</li>
+      <li><strong>Account number:</strong> XXXX${last4}</li>
+      <li><strong>IFSC:</strong> ${ifsc || "-"}</li>
+    </ul>
+    <p>You can now use this bank account for adding funds and withdrawals on EquityIQ.</p>
+    <p>If you didn’t make this change or notice anything unusual, please contact us immediately.</p>
+    <p>Thanks for choosing EquityIQ,<br />Team EquityIQ</p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    ...(replyTo ? { replyTo } : {}),
+  });
+};
 export const sendWelcomeEmail = async ({ to, name }) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;

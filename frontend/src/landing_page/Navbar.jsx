@@ -58,8 +58,9 @@ const Navbar = () => {
       }
       try {
         const parsed = JSON.parse(raw);
-        const expiresAt = parsed?.expiresAt;
         const storedUser = parsed?.user;
+        const expiresAt =
+          parsed?.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000;
         if (!expiresAt || !storedUser || Date.now() > expiresAt) {
           localStorage.removeItem("equityiq_user");
           setUser(null);
@@ -75,7 +76,11 @@ const Navbar = () => {
           const data = await res.json();
           if (data.user) {
             setUser(data.user);
-            // Update localStorage with latest user info
+            // Keep the original expiresAt from login, do not reset on user fetch
+            const raw = localStorage.getItem("equityiq_user");
+            const parsed = raw ? JSON.parse(raw) : null;
+            const expiresAt =
+              parsed?.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000;
             localStorage.setItem(
               "equityiq_user",
               JSON.stringify({ user: data.user, expiresAt }),
@@ -150,6 +155,7 @@ const Navbar = () => {
       );
 
       if (res.data?.user) {
+        // Keep the original expiresAt from login, do not reset on profile update
         const raw = localStorage.getItem("equityiq_user");
         const parsed = raw ? JSON.parse(raw) : null;
         const expiresAt =
