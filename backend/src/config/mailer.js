@@ -6,6 +6,7 @@ export const sendWithdrawalRequestEmail = async ({
   bankName,
   last4,
   dateTime,
+  txnId,
 }) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
@@ -21,6 +22,7 @@ export const sendWithdrawalRequestEmail = async ({
     <ul>
       <li><strong>Amount:</strong> ${formattedAmount}</li>
       <li><strong>Bank:</strong> ${bankName} (XXXX${last4})</li>
+      ${txnId ? `<li><strong>Transaction ID:</strong> ${txnId}</li>` : ""}
       <li><strong>Request time:</strong> ${dateTime}</li>
       <li><strong>Status:</strong> Processing</li>
     </ul>
@@ -139,18 +141,40 @@ const getTransporter = () => {
   });
 };
 
-export const sendOtpEmail = async ({ to, name, otp }) => {
+export const sendOtpEmail = async ({
+  to,
+  name,
+  otp,
+  txnId = null,
+  note = null,
+}) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const replyTo = process.env.SMTP_REPLY_TO;
 
   const subject = "Your EquityIQ verification code";
-  const text = `Hi ${name},\n\nYour verification code is ${otp}. It expires in 10 minutes.\n\nIf you didn't request this, you can ignore this email.`;
-  const html = `
+  // Plain text version: include txnId and note if provided
+  let text = `Hi ${name},\n\nYour verification code is ${otp}. It expires in 10 minutes.\n\n`;
+  if (txnId) {
+    text += `Transaction ID: ${txnId}\n\n`;
+  }
+  if (note) {
+    text += `IMPORTANT: ${note}\n\n`;
+  }
+  text += `If you didn't request this, you can ignore this email.`;
+
+  // HTML version
+  let html = `
     <p>Hi ${name},</p>
     <p>Your verification code is <strong>${otp}</strong>. It expires in 10 minutes.</p>
-    <p>If you didn't request this, you can ignore this email.</p>
-  `;
+`;
+  if (txnId) {
+    html += `    <p><strong>Transaction ID:</strong> ${txnId}</p>\n`;
+  }
+  if (note) {
+    html += `    <p><strong>${note}</strong></p>\n`;
+  }
+  html += `    <p>If you didn't request this, you can ignore this email.</p>`;
 
   await transporter.sendMail({
     from,
@@ -162,20 +186,27 @@ export const sendOtpEmail = async ({ to, name, otp }) => {
   });
 };
 
-export const sendAddMoneyEmail = async ({ to, name, amount, dateTime }) => {
+export const sendAddMoneyEmail = async ({
+  to,
+  name,
+  amount,
+  dateTime,
+  txnId,
+}) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const replyTo = process.env.SMTP_REPLY_TO;
 
   const subject = "We’ve received your add-money request";
   const formattedAmount = `₹${amount}`;
-  const text = `Hi ${name},\n\nWe’ve received your request to add funds to your EquityIQ account.\n\nTransaction details:\n• Amount: ${formattedAmount}\n• Date & time: ${dateTime}\n• Status: Processing\n\nYour payment is currently being verified by our payment partner.\nThis usually takes a few minutes, but in rare cases it may take a day.\n\nOnce confirmed, the funds will be available in your EquityIQ account automatically.\n\nIf the payment is unsuccessful, the amount will be refunded to your source account as per bank timelines.\n\nYou don’t need to take any action right now.\n\nThanks for trusting EquityIQ.\n\n—\nTeam EquityIQ`;
+  const text = `Hi ${name},\n\nWe’ve received your request to add funds to your EquityIQ account.\n\nTransaction details:\n• Amount: ${formattedAmount}\n${txnId ? `• Transaction ID: ${txnId}\n` : ""}• Date & time: ${dateTime}\n• Status: Processing\n\nYour payment is currently being verified by our payment partner.\nThis usually takes a few minutes, but in rare cases it may take a day.\n\nOnce confirmed, the funds will be available in your EquityIQ account automatically.\n\nIf the payment is unsuccessful, the amount will be refunded to your source account as per bank timelines.\n\nYou don’t need to take any action right now.\n\nThanks for trusting EquityIQ.\n\n—\nTeam EquityIQ`;
 
   const html = `
     <p>Hi ${name},</p>
     <p>We’ve received your request to add funds to your EquityIQ account.</p>
     <p><strong>Transaction details:</strong><br />
       • Amount: ${formattedAmount}<br />
+      ${txnId ? `<strong>Transaction ID:</strong> ${txnId}<br />` : ""}
       • Date &amp; time: ${dateTime}<br />
       • Status: Processing
     </p>

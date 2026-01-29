@@ -52,10 +52,10 @@ const Right2 = ({ onBack, amount }) => {
       );
       const data = await response.json();
       if (response.ok) {
-        // Now send OTP to email
+        // Now send OTP to email (include txnId so backend can create/verify pending txn)
         await sendOtp({
           endpoint: "http://localhost:5000/api/auth/send-payment-otp",
-          payload: { email },
+          payload: { email, amount, txnId: normalizedTxnId, type: "add" },
           onSuccess: () => setOtpSent(true),
           successMessage: "OTP sent to your email.",
         });
