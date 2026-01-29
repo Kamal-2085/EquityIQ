@@ -19,6 +19,12 @@ const ProfileMenu = ({
   const email = user?.email || "";
   const avatarFallback = displayName || name;
 
+  // Cache-busting for avatarUrl: add a timestamp if available
+  const [avatarCacheBuster] = React.useState(Date.now());
+  const avatarSrc = user?.avatarUrl
+    ? `${user.avatarUrl}?cb=${avatarCacheBuster}`
+    : undefined;
+
   return (
     <div
       ref={profileMenuRef}
@@ -28,7 +34,7 @@ const ProfileMenu = ({
         <div className="h-12 w-12 rounded-full bg-blue-600 text-white text-sm font-semibold flex items-center justify-center overflow-hidden">
           {user?.avatarUrl ? (
             <img
-              src={user.avatarUrl}
+              src={avatarSrc}
               alt="Profile"
               className="h-full w-full object-cover"
             />

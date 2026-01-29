@@ -148,7 +148,7 @@ const PulseNavbar = () => {
         formData,
       );
 
-      if (res.data?.user) {
+      if (res.status === 200 && res.data?.user) {
         const raw = localStorage.getItem("equityiq_user");
         const parsed = raw ? JSON.parse(raw) : null;
         const expiresAt =
@@ -156,12 +156,24 @@ const PulseNavbar = () => {
         const payload = { user: res.data.user, expiresAt };
         localStorage.setItem("equityiq_user", JSON.stringify(payload));
         window.dispatchEvent(new Event("equityiq_user_updated"));
+        toast.success("Profile image updated");
+        setProfileOpen(false);
+      } else {
+        console.error("Upload failed response:", res);
+        toast.error(res.data?.message || "Upload failed");
       }
-
-      toast.success("Profile image updated");
-      setProfileOpen(false);
     } catch (error) {
-      toast.error(error.response?.data?.message || "Upload failed");
+      if (error.response) {
+        console.error("Image upload error (response):", error.response);
+      } else if (error.request) {
+        console.error("Image upload error (request):", error.request);
+      } else {
+        console.error("Image upload error (message):", error.message);
+      }
+      const errMsg =
+        error.response?.data?.message || error.message || "Upload failed";
+      console.error("Image upload error (final message):", errMsg);
+      toast.error(errMsg);
     } finally {
       setIsUploading(false);
       event.target.value = "";

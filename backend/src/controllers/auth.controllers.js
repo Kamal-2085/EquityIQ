@@ -558,11 +558,12 @@ export const updateProfileImage = async (req, res) => {
         phone: user.phone,
         isEmailVerified: user.isEmailVerified,
         avatarUrl: user.avatarUrl,
+        accountBalance: user.accountBalance ?? 0,
       },
     });
   } catch (error) {
     console.error("Profile image update failed:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: error.message || "Server error" });
   }
 };
 
