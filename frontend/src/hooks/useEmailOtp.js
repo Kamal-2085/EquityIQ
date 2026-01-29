@@ -17,16 +17,13 @@ const useEmailOtp = () => {
       // in non-production environments. Prefer showing a single success
       // toast with the preview when available.
       if (res.status >= 200 && res.status < 300) {
-        if (res.data?.otpPreview) {
-          const msg = res.data?.message
-            ? `${res.data.message} — Dev OTP: ${res.data.otpPreview}`
-            : `Dev OTP: ${res.data.otpPreview}`;
-          toast.success(msg, { id: toastId });
-        } else {
-          toast.success(successMessage || "OTP sent successfully", {
+        // Show backend message or default success message; never expose otpPreview in UI
+        toast.success(
+          res.data?.message || successMessage || "OTP sent successfully",
+          {
             id: toastId,
-          });
-        }
+          },
+        );
         onSuccess?.(res.data);
       } else {
         toast.error(res.data?.message || "Unable to send OTP", { id: toastId });
@@ -42,16 +39,11 @@ const useEmailOtp = () => {
       ) {
         toast.dismiss(toastId);
         const data = error.response.data || {};
-        if (data.otpPreview) {
-          const msg = data.message
-            ? `${data.message} — Dev OTP: ${data.otpPreview}`
-            : `Dev OTP: ${data.otpPreview}`;
-          toast.success(msg, { id: toastId });
-        } else {
-          toast.success(successMessage || "OTP sent successfully", {
-            id: toastId,
-          });
-        }
+        // Don't show dev OTP in UI; show backend message or fallback success message
+        toast.success(
+          data.message || successMessage || "OTP sent successfully",
+          { id: toastId },
+        );
         onSuccess?.(error.response.data);
         return error.response.data;
       }
@@ -72,16 +64,11 @@ const useEmailOtp = () => {
             data = null;
           }
           toast.dismiss(toastId);
-          if (data?.otpPreview) {
-            const msg = data.message
-              ? `${data.message} — Dev OTP: ${data.otpPreview}`
-              : `Dev OTP: ${data.otpPreview}`;
-            toast.success(msg, { id: toastId });
-          } else {
-            toast.success(successMessage || "OTP sent successfully", {
-              id: toastId,
-            });
-          }
+          // Never display otpPreview in UI; show backend message or generic success
+          toast.success(
+            data?.message || successMessage || "OTP sent successfully",
+            { id: toastId },
+          );
           onSuccess?.(data);
           return data;
         }

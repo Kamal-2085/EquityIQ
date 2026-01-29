@@ -1,3 +1,16 @@
+import User from "../models/User.model.js";
+import PendingUser from "../models/PendingUser.model.js";
+import bcrypt from "bcryptjs";
+import {
+  sendOtpEmail,
+  sendAddMoneyEmail,
+  sendBankAccountAddedEmail,
+  sendWithdrawalRequestEmail,
+} from "../config/mailer.js";
+import { sendWelcomeEmail } from "../config/mailer.js";
+import cloudinary from "../config/cloudinary.js";
+import streamifier from "streamifier";
+
 // Store UPI Transaction ID for user
 export const submitUpiTransaction = async (req, res) => {
   try {
@@ -7,10 +20,12 @@ export const submitUpiTransaction = async (req, res) => {
     }
     const normalizedTxnId = String(txnId).trim().toLowerCase();
     // Check if txnId exists for any user (case-insensitive, trimmed)
+    // Ignore records that are still `OTPNotVerified` (user submitted txnId but hasn't verified)
     const existing = await User.findOne({
       transactionHistory: {
         $elemMatch: {
           txnId: { $regex: `^${normalizedTxnId}$`, $options: "i" },
+          txnType: { $ne: "OTPNotVerified" },
         },
       },
     });
@@ -24,8 +39,10 @@ export const submitUpiTransaction = async (req, res) => {
     user.transactionHistory = user.transactionHistory || [];
     user.transactionHistory.push({
       txnId: normalizedTxnId,
-      amount,
+      amount: Number(amount),
       date: new Date(),
+      txnType: "OTPNotVerified",
+      status: "pending",
     });
     await user.save();
     return res
@@ -131,23 +148,14 @@ export const verifyPasswordOtp = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-import User from "../models/User.model.js";
-import PendingUser from "../models/PendingUser.model.js";
-import bcrypt from "bcryptjs";
-import {
-  sendOtpEmail,
-  sendAddMoneyEmail,
-  sendBankAccountAddedEmail,
-  sendWithdrawalRequestEmail,
-} from "../config/mailer.js";
-import { sendWelcomeEmail } from "../config/mailer.js";
-import cloudinary from "../config/cloudinary.js";
-import streamifier from "streamifier";
-
 const OTP_EXP_MINUTES = 10;
 
 const generateOtp = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const generateTxnId = (prefix = "tx") => {
+  return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000000)}`;
 };
 
 const uploadBufferToCloudinary = (buffer, options) =>
@@ -251,7 +259,7 @@ export const signup = async (req, res) => {
 
 export const sendPaymentOtp = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, amount, type } = req.body;
 
     if (!email) {
       return res.status(400).json({ message: "Email is required" });
@@ -270,6 +278,23 @@ export const sendPaymentOtp = async (req, res) => {
     user.otpExpires = otpExpires;
     await user.save();
 
+    // If this OTP is for a withdrawal request, create a pending withdraw txn
+    try {
+      if (type === "withdraw" && Number(amount) > 0) {
+        user.transactionHistory = user.transactionHistory || [];
+        user.transactionHistory.push({
+          txnId: generateTxnId("wd"),
+          amount: Number(amount),
+          date: new Date(),
+          txnType: "Withdraw",
+          status: "pending",
+        });
+        await user.save();
+      }
+    } catch (txnErr) {
+      console.error("Failed to create pending withdraw txn:", txnErr);
+    }
+
     // Debug log for OTP
     console.log("[OTP DEBUG] Payment OTP generated:", {
       email: user.email,
@@ -277,6 +302,8 @@ export const sendPaymentOtp = async (req, res) => {
       otpHash,
       otpExpires,
       now: new Date(),
+      amount,
+      type,
     });
 
     try {
@@ -304,7 +331,7 @@ export const sendPaymentOtp = async (req, res) => {
 
 export const verifyPaymentOtp = async (req, res) => {
   try {
-    const { email, otp, amount } = req.body;
+    const { email, otp, amount, type } = req.body;
     const normalizedOtp = String(otp || "").trim();
 
     if (!email || !normalizedOtp) {
@@ -335,7 +362,10 @@ export const verifyPaymentOtp = async (req, res) => {
       otpHash: user.otpHash,
       otpExpires: user.otpExpires,
       now: new Date(),
+      amount,
+      type,
     });
+
     const isMatch = await bcrypt.compare(normalizedOtp, user.otpHash);
     if (!isMatch) {
       console.log("[OTP DEBUG] OTP mismatch!");
@@ -347,45 +377,102 @@ export const verifyPaymentOtp = async (req, res) => {
     user.otpExpires = null;
     await user.save();
 
-    // Parse amount and update user's account balance (for withdrawal, you may want to deduct instead)
+    // Parse amount and update user's account balance
     const parsedAmount = Number(amount) || 0;
     if (parsedAmount > 0) {
-      user.accountBalance = (user.accountBalance || 0) - parsedAmount;
+      if (type === "withdraw") {
+        // For withdrawals, deduct
+        user.accountBalance = (user.accountBalance || 0) - parsedAmount;
+
+        // Send withdrawal request email
+        const dateTime = new Date().toLocaleString();
+        let bankName = "-",
+          last4 = "XXXX";
+        if (user.bankAccount) {
+          bankName = user.bankAccount.bankName || "-";
+          last4 = user.bankAccount.accountNumber
+            ? String(user.bankAccount.accountNumber).slice(-4)
+            : "XXXX";
+        }
+        try {
+          await sendWithdrawalRequestEmail({
+            to: user.email,
+            name: user.name,
+            amount: parsedAmount,
+            bankName,
+            last4,
+            dateTime,
+          });
+        } catch (mailError) {
+          console.error("Withdrawal request email send failed:", mailError);
+        }
+      } else {
+        // Default to 'add' behavior: credit the account
+        user.accountBalance = (user.accountBalance || 0) + parsedAmount;
+        try {
+          await sendAddMoneyEmail({
+            to: user.email,
+            name: user.name,
+            amount: parsedAmount,
+          });
+        } catch (mailError) {
+          console.error("Add money email send failed:", mailError);
+        }
+      }
+
+      // Ensure transactionHistory exists and attempt to mark a matching pending txn completed
+      user.transactionHistory = user.transactionHistory || [];
+      let foundIndex = -1;
+      for (let i = user.transactionHistory.length - 1; i >= 0; i--) {
+        const t = user.transactionHistory[i];
+        if (
+          Number(t.amount) === parsedAmount &&
+          (t.status === "pending" || !t.status)
+        ) {
+          foundIndex = i;
+          break;
+        }
+      }
+
+      if (foundIndex !== -1) {
+        user.transactionHistory[foundIndex].status = "completed";
+        user.transactionHistory[foundIndex].txnType =
+          type === "withdraw" ? "Withdraw" : "Add";
+        user.transactionHistory[foundIndex].completedAt = new Date();
+      } else {
+        // If no pending txn found, create a completed record so history is accurate
+        user.transactionHistory.push({
+          txnId: generateTxnId(type === "withdraw" ? "wd" : "add"),
+          amount: parsedAmount,
+          date: new Date(),
+          txnType: type === "withdraw" ? "Withdraw" : "Add",
+          status: "completed",
+          completedAt: new Date(),
+        });
+      }
+
       try {
         await user.save();
       } catch (saveError) {
-        console.error("Failed to update account balance:", saveError);
+        console.error("Failed to save user after txn update:", saveError);
       }
     }
 
-    // Send withdrawal request email
-    const dateTime = new Date().toLocaleString();
-    let bankName = "-",
-      last4 = "XXXX";
-    if (user.bankAccount) {
-      bankName = user.bankAccount.bankName || "-";
-      last4 = user.bankAccount.accountNumber
-        ? String(user.bankAccount.accountNumber).slice(-4)
-        : "XXXX";
-    }
-    try {
-      await sendWithdrawalRequestEmail({
-        to: user.email,
+    return res.status(200).json({
+      message: "OTP verified",
+      accountBalance: user.accountBalance ?? 0,
+      user: {
+        id: user._id,
         name: user.name,
-        amount: parsedAmount,
-        bankName,
-        last4,
-        dateTime,
-      });
-    } catch (mailError) {
-      console.error("Withdrawal request email send failed:", mailError);
-    }
-
-    return res
-      .status(200)
-      .json({ message: "OTP verified", accountBalance: user.accountBalance });
+        email: user.email,
+        phone: user.phone,
+        isEmailVerified: user.isEmailVerified,
+        avatarUrl: user.avatarUrl,
+        accountBalance: user.accountBalance ?? 0,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: error.message || "Server error" });
   }
 };
 

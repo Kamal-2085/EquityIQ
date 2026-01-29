@@ -84,9 +84,19 @@ const Right2 = ({ onBack, amount }) => {
     setOtpError("");
     await verifyOtp({
       endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
-      payload: { email, otp: normalizedOtp, amount },
+      payload: { email, otp: normalizedOtp, amount, type: "add" },
       successMessage: "OTP verified. Payment will be confirmed shortly",
-      onSuccess: () => {
+      onSuccess: (data) => {
+        try {
+          if (data?.user) {
+            const stored = JSON.parse(
+              localStorage.getItem("equityiq_user") || "{}",
+            );
+            stored.user = { ...(stored.user || {}), ...data.user };
+            localStorage.setItem("equityiq_user", JSON.stringify(stored));
+            window.dispatchEvent(new Event("equityiq_user_updated"));
+          }
+        } catch (e) {}
         setOtp("");
         navigate("/");
       },

@@ -36,7 +36,7 @@ const Right3 = ({ bankName, bankCode, accountNumber, balance }) => {
     }
     await sendOtp({
       endpoint: "http://localhost:5000/api/auth/send-payment-otp",
-      payload: { email },
+      payload: { email, amount: Number(amount), type: "withdraw" },
       onSuccess: () => setShowOtpInput(true),
       successMessage: "OTP sent to your email.",
     });
@@ -55,12 +55,21 @@ const Right3 = ({ bankName, bankCode, accountNumber, balance }) => {
     }
     await verifyOtp({
       endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
-      payload: { email, otp, amount: Number(amount) },
+      payload: { email, otp, amount: Number(amount), type: "withdraw" },
       successMessage: "OTP verified. Withdrawal will be processed.",
-      onSuccess: () => {
+      onSuccess: (data) => {
+        try {
+          if (data?.user) {
+            const stored = JSON.parse(
+              localStorage.getItem("equityiq_user") || "{}",
+            );
+            stored.user = { ...(stored.user || {}), ...data.user };
+            localStorage.setItem("equityiq_user", JSON.stringify(stored));
+            window.dispatchEvent(new Event("equityiq_user_updated"));
+          }
+        } catch (e) {}
         setOtp("");
         setShowOtpInput(false);
-        toast.success("Withdrawal request submitted.");
         navigate("/");
       },
     });

@@ -44,7 +44,7 @@ const userSchema = new mongoose.Schema(
         txnId: { type: String, required: true },
         amount: { type: Number, required: true },
         date: { type: Date, default: Date.now },
-        txnType: { type: String, enum: ["Add", "Withdraw"],},
+        txnType: { type: String, enum: ["Add", "Withdraw", "OTPNotVerified"] },
         status: { type: String, default: "pending" },
       },
     ],
