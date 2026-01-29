@@ -57,7 +57,7 @@ const Right2 = ({ onBack, amount }) => {
           endpoint: "http://localhost:5000/api/auth/send-payment-otp",
           payload: { email, amount, txnId: normalizedTxnId, type: "add" },
           onSuccess: () => setOtpSent(true),
-          successMessage: "OTP sent to your email.",
+          successMessage: "OTP sent to email",
         });
       } else {
         setTxnIdError(data.message || "Failed to submit transaction ID");

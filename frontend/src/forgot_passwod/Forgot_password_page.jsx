@@ -25,11 +25,7 @@ const Forgot_password_page = () => {
         },
       );
       if (res.data?.otpSent || res.data?.otpPreview) {
-        toast.success(
-          res.data?.otpSent
-            ? "OTP sent to your email"
-            : `Dev OTP: ${res.data.otpPreview}`,
-        );
+        toast.success("OTP sent to email");
         setEmail(data.identifier);
         setOtpStage(true);
         // Do not reset email field

@@ -13,7 +13,6 @@ const pendingTxnSchema = new mongoose.Schema(
     },
     status: { type: String, default: "pending" },
     meta: { type: Object },
-    createdAt: { type: Date, default: Date.now, index: true },
   },
   { timestamps: true },
 );

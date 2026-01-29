@@ -18,12 +18,7 @@ const useEmailOtp = () => {
       // toast with the preview when available.
       if (res.status >= 200 && res.status < 300) {
         // Show backend message or default success message; never expose otpPreview in UI
-        toast.success(
-          res.data?.message || successMessage || "OTP sent successfully",
-          {
-            id: toastId,
-          },
-        );
+        toast.success("OTP sent to email", { id: toastId });
         onSuccess?.(res.data);
       } else {
         toast.error(res.data?.message || "Unable to send OTP", { id: toastId });
@@ -40,10 +35,7 @@ const useEmailOtp = () => {
         toast.dismiss(toastId);
         const data = error.response.data || {};
         // Don't show dev OTP in UI; show backend message or fallback success message
-        toast.success(
-          data.message || successMessage || "OTP sent successfully",
-          { id: toastId },
-        );
+        toast.success("OTP sent to email", { id: toastId });
         onSuccess?.(error.response.data);
         return error.response.data;
       }
@@ -65,10 +57,7 @@ const useEmailOtp = () => {
           }
           toast.dismiss(toastId);
           // Never display otpPreview in UI; show backend message or generic success
-          toast.success(
-            data?.message || successMessage || "OTP sent successfully",
-            { id: toastId },
-          );
+          toast.success("OTP sent to email", { id: toastId });
           onSuccess?.(data);
           return data;
         }

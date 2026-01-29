@@ -145,36 +145,42 @@ export const sendOtpEmail = async ({
   to,
   name,
   otp,
-  txnId = null,
-  note = null,
+  txnId,
+  includeVerifyNote = false,
 }) => {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM || process.env.SMTP_USER;
   const replyTo = process.env.SMTP_REPLY_TO;
 
   const subject = "Your EquityIQ verification code";
-  // Plain text version: include txnId and note if provided
-  let text = `Hi ${name},\n\nYour verification code is ${otp}. It expires in 10 minutes.\n\n`;
+  // Build text version
+  let text = `Hi ${name},\n\nYour verification code is ${otp}. It expires in 10 minutes.`;
   if (txnId) {
-    text += `Transaction ID: ${txnId}\n\n`;
+    text += `\n\nTransaction ID: ${txnId}`;
   }
-  if (note) {
-    text += `IMPORTANT: ${note}\n\n`;
+  if (includeVerifyNote) {
+    text += `\n\nYOU MUST VERIFY THE PAYMENT IN 10 MINS.`;
   }
-  text += `If you didn't request this, you can ignore this email.`;
+  text += `\n\nIf you didn't request this, you can ignore this email.`;
 
-  // HTML version
+  // Build HTML version
   let html = `
     <p>Hi ${name},</p>
     <p>Your verification code is <strong>${otp}</strong>. It expires in 10 minutes.</p>
-`;
+  `;
   if (txnId) {
-    html += `    <p><strong>Transaction ID:</strong> ${txnId}</p>\n`;
+    html += `
+      <p><strong>Transaction ID:</strong> ${txnId}</p>
+    `;
   }
-  if (note) {
-    html += `    <p><strong>${note}</strong></p>\n`;
+  if (includeVerifyNote) {
+    html += `
+      <p><strong>You Must Verify the Payment in 10 mins</strong></p>
+    `;
   }
-  html += `    <p>If you didn't request this, you can ignore this email.</p>`;
+  html += `
+    <p>If you didn't request this, you can ignore this email.</p>
+  `;
 
   await transporter.sendMail({
     from,

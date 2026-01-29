@@ -38,7 +38,7 @@ const Right3 = ({ bankName, bankCode, accountNumber, balance }) => {
       endpoint: "http://localhost:5000/api/auth/send-payment-otp",
       payload: { email, amount: Number(amount), type: "withdraw" },
       onSuccess: () => setShowOtpInput(true),
-      successMessage: "OTP sent to your email.",
+      successMessage: "OTP sent to email",
     });
   };
 

@@ -41,7 +41,7 @@ const AddAccount = () => {
           },
         );
         if (res.data && res.data.success) {
-          toast.success("OTP sent successfully");
+          toast.success("OTP sent to email");
           setShowOtp(true);
         }
       } catch (err) {

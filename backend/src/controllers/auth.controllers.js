@@ -58,6 +58,70 @@ export const submitUpiTransaction = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+// Update user password (after OTP verification)
+export const updatePassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password are required" });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    await user.save();
+    return res
+      .status(200)
+      .json({ success: true, message: "Password updated successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+// Send password reset OTP
+export const sendPasswordOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+    user.otpHash = otpHash;
+    user.otpExpires = otpExpires;
+    await user.save();
+    try {
+      await sendOtpEmail({ to: user.email, name: user.name, otp });
+      return res
+        .status(200)
+        .json({ message: "OTP sent to email.", otpSent: true });
+    } catch (mailError) {
+      console.error("Password OTP email send failed:", mailError);
+      const response = {
+        message: "Failed to send OTP email. Please try again later.",
+        otpSent: false,
+      };
+      if (process.env.NODE_ENV !== "production") {
+        response.otpPreview = otp;
+      }
+      return res.status(200).json(response);
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// Verify password reset OTP
 export const verifyPasswordOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -140,53 +204,134 @@ export const signup = async (req, res) => {
     const existingPendingByPhone = await PendingUser.findOne({ phone });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const normalizedTxnId = String(txnId).trim().toLowerCase();
-    // Check if txnId exists for any user (case-insensitive, trimmed)
-    // Ignore records that are still `OTPNotVerified` (user submitted txnId but hasn't verified)
-    const existing = await User.findOne({
-      transactionHistory: {
-        $elemMatch: {
-          txnId: { $regex: `^${normalizedTxnId}$`, $options: "i" },
-          txnType: { $ne: "OTPNotVerified" },
-        },
-      },
-    });
-    if (existing) {
-      return res.status(400).json({ message: "Payment can't be verified" });
-    }
-    // Create a pending transaction document (auto-deletes after 10 minutes)
-    try {
-      await PendingTransaction.create({
-        user: user._id,
-        txnId: normalizedTxnId,
-        amount: Number(amount),
-        date: new Date(),
-        txnType: "OTPNotVerified",
-        status: "pending",
-      });
-    } catch (e) {
-      console.error("Failed to create pending transaction:", e);
-      return res.status(500).json({ message: "Failed to record transaction" });
-    }
-    return res
-      .status(200)
-      .json({ message: "Transaction recorded successfully." });
 
-    // Generate OTP and attach to user
     const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
     const otpExpires = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+
+    const pendingPayload = {
+      name,
+      email: normalizedEmail,
+      phone,
+      password: hashedPassword,
+      otpHash,
+      otpExpires,
+    };
+
+    if (existingPendingByEmail) {
+      await PendingUser.updateOne({ email: normalizedEmail }, pendingPayload);
+    } else if (existingPendingByPhone) {
+      await PendingUser.updateOne({ phone }, pendingPayload);
+    } else {
+      await PendingUser.create(pendingPayload);
+    }
+
+    try {
+      await sendOtpEmail({ to: normalizedEmail, name, otp });
+      return res.status(201).json({
+        message: "Signup successful. OTP sent to email.",
+        otpSent: true,
+        user: {
+          name,
+          email: normalizedEmail,
+          phone,
+          isEmailVerified: false,
+          avatarUrl: null,
+        },
+      });
+    } catch (mailError) {
+      console.error("OTP email send failed:", mailError);
+      const response = {
+        message:
+          "Signup successful, but failed to send OTP email. Please try again later.",
+        otpSent: false,
+        user: {
+          name,
+          email: normalizedEmail,
+          phone,
+          isEmailVerified: false,
+          avatarUrl: null,
+        },
+      };
+      if (process.env.NODE_ENV !== "production") {
+        response.otpPreview = otp;
+      }
+      return res.status(201).json(response);
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const sendPaymentOtp = async (req, res) => {
+  try {
+    const { email, amount, type, txnId } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // If txnId provided (add-money flow), enforce uniqueness against completed txns
+    if (txnId) {
+      const normalizedTxnId = String(txnId).trim().toLowerCase();
+      const exists = await User.findOne({
+        transactionHistory: {
+          $elemMatch: {
+            txnId: { $regex: `^${normalizedTxnId}$`, $options: "i" },
+            txnType: { $ne: "OTPNotVerified" },
+          },
+        },
+      });
+      if (exists) {
+        return res
+          .status(400)
+          .json({ message: "This transaction ID has already been processed." });
+      }
+
+      // Ensure a PendingTransaction exists for this txnId (idempotent)
+      try {
+        const existingPending = await PendingTransaction.findOne({
+          user: user._id,
+          txnId: normalizedTxnId,
+        });
+        if (!existingPending) {
+          await PendingTransaction.create({
+            user: user._id,
+            txnId: normalizedTxnId,
+            amount: Number(amount) || 0,
+            date: new Date(),
+            txnType: "OTPNotVerified",
+            status: "pending",
+          });
+        }
+      } catch (e) {
+        console.error("Failed to ensure pending transaction for txnId:", e);
+        return res
+          .status(500)
+          .json({ message: "Failed to create pending transaction" });
+      }
+    }
+
+    const otp = generateOtp();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + OTP_EXP_MINUTES * 60 * 1000);
+
     user.otpHash = otpHash;
     user.otpExpires = otpExpires;
     await user.save();
 
     // If this OTP is for a withdrawal request, create a pending withdraw txn
     try {
-      if (type === "withdraw" && parsedAmount > 0) {
+      if (type === "withdraw" && Number(amount) > 0) {
         await PendingTransaction.create({
           user: user._id,
           txnId: generateTxnId("wd"),
-          amount: parsedAmount,
+          amount: Number(amount),
           date: new Date(),
           txnType: "Withdraw",
           status: "pending",
@@ -203,23 +348,17 @@ export const signup = async (req, res) => {
       otpHash,
       otpExpires,
       now: new Date(),
-      amount: parsedAmount,
+      amount,
       type,
     });
 
     try {
-      // If this is an add-money flow with a txnId, include txnId and a verification note
-      if (type === "add" && normalizedTxnId) {
-        await sendOtpEmail({
-          to: user.email,
-          name: user.name,
-          otp,
-          txnId: normalizedTxnId,
-          note: "You Must Verify the Payment in 10 mins",
-        });
-      } else {
-        await sendOtpEmail({ to: user.email, name: user.name, otp });
+      const otpMailOptions = { to: user.email, name: user.name, otp };
+      if (txnId || type === "add") {
+        otpMailOptions.txnId = txnId || undefined;
+        otpMailOptions.includeVerifyNote = true;
       }
+      await sendOtpEmail(otpMailOptions);
       return res.status(200).json({
         message: "OTP sent to email.",
         otpSent: true,
@@ -621,12 +760,7 @@ export const verifyBankDetails = async (req, res) => {
     user.otpHash = otpHash;
     user.otpExpires = otpExpires;
     await user.save();
-    // Send standard OTP email for bank verification
-    try {
-      await sendOtpEmail({ to: user.email, name: user.name, otp });
-    } catch (mailError) {
-      console.error("Bank verification OTP email send failed:", mailError);
-    }
+    await sendOtpEmail({ to: user.email, name: user.name, otp });
     return res.status(200).json({ success: true });
   } catch (error) {
     return res.status(500).json({ toast: "Server error" });

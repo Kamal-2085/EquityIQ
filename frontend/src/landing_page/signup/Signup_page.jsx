@@ -57,7 +57,7 @@ const Signup_page = () => {
         setStage("verify");
         if (data.user) setUser(data.user);
       },
-      successMessage: "OTP sent successfully",
+      successMessage: "OTP sent to email",
     });
     return res;
   };
