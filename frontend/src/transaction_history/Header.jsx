@@ -34,7 +34,7 @@ const Header = () => {
             Balance:₹{balance.toLocaleString()}
           </h2>
         </div>
-
+        <h1 className="text-3xl md:text-4xl font-semibold text-gray-900 text-center">Transactions History</h1>
         <button className="flex items-center gap-2 rounded-md border bg-green-500 border-green-300 px-4 py-2 text-sm font-medium text-white hover:bg-green-50 hover:text-green-900 transition cursor-pointer">
           <FiDownload className="text-base" />
           Download Statement

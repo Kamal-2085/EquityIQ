@@ -3,6 +3,7 @@ import img53 from "../assets/img53.jpeg";
 import img47 from "../assets/img47.png";
 import toast from "react-hot-toast";
 import useEmailOtp from "../hooks/useEmailOtp.js";
+import api from "../auth/apiClient";
 import { useNavigate } from "react-router-dom";
 const Right2 = ({ onBack, amount }) => {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -47,22 +48,19 @@ const Right2 = ({ onBack, amount }) => {
         txnId: normalizedTxnId,
         amount,
       });
-      const data = res.data;
-      if (res.status >= 200 && res.status < 300) {
-        // Now send OTP to email (include txnId so backend can create/verify pending txn)
-        await sendOtp({
-          endpoint: "/auth/send-payment-otp",
-          payload: { email, amount, txnId: normalizedTxnId, type: "add" },
-          onSuccess: () => setOtpSent(true),
-          successMessage: "OTP sent to email",
-        });
-      } else {
-        setTxnIdError(data.message || "Failed to submit transaction ID");
-        toast.error(data.message || "Failed to submit transaction ID");
-      }
+      // If backend accepted the pending txn, ask it to send OTP
+      await sendOtp({
+        endpoint: "/auth/send-payment-otp",
+        payload: { email, amount, txnId: normalizedTxnId, type: "add" },
+        onSuccess: () => setOtpSent(true),
+        successMessage: "OTP sent to email",
+      });
     } catch (err) {
-      setTxnIdError("Server error. Please try again later.");
-      toast.error("Server error. Please try again later.");
+      console.error("submitTxn error:", err);
+      // Prefer backend-provided message when available
+      const serverMessage = err?.response?.data?.message || err?.message;
+      setTxnIdError(serverMessage || "Server error. Please try again later.");
+      toast.error(serverMessage || "Server error. Please try again later.");
     }
   };
 

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Header from "./Header.jsx";
-import axios from "axios";
 import api from "../auth/apiClient";
-
+import Transaction from "./Transaction.jsx";
 const Transaction_history_page = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,32 +50,9 @@ const Transaction_history_page = () => {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="text-gray-600">
-                  <th className="px-4 py-2">Txn ID</th>
-                  <th className="px-4 py-2">Type</th>
-                  <th className="px-4 py-2">Amount</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Date</th>
-                </tr>
-              </thead>
-              <tbody>
                 {transactions.map((t, idx) => (
-                  <tr key={`${t.txnId || idx}-${idx}`} className="border-t">
-                    <td className="px-4 py-3">{t.txnId}</td>
-                    <td className="px-4 py-3">{t.txnType}</td>
-                    <td className="px-4 py-3">
-                      ₹{(t.amount || 0).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3">{t.status}</td>
-                    <td className="px-4 py-3">
-                      {t.date ? new Date(t.date).toLocaleString() : ""}
-                    </td>
-                  </tr>
+                  <Transaction key={`${t.txnId || idx}-${idx}`} transaction={t} />
                 ))}
-              </tbody>
-            </table>
           </div>
         )}
       </section>
