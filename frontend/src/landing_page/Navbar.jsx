@@ -11,6 +11,8 @@ import img13 from "../assets/img13.png";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import axios from "axios";
+import api from "../auth/apiClient";
+import { useAuth } from "../auth/AuthProvider";
 import ProfileMenu from "../components/ProfileMenu.jsx";
 const Navbar = () => {
   const [menubar, Setmenubar] = useState(false);
@@ -67,15 +69,12 @@ const Navbar = () => {
           return;
         }
         // Fetch latest user data from backend
-        const res = await fetch(
-          `http://localhost:5000/api/auth/me?email=${encodeURIComponent(
-            storedUser.email,
-          )}`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.user) {
-            setUser(data.user);
+        try {
+          const res = await api.get(
+            `/auth/me?email=${encodeURIComponent(storedUser.email)}`,
+          );
+          if (res.data?.user) {
+            setUser(res.data.user);
             // Keep the original expiresAt from login, do not reset on user fetch
             const raw = localStorage.getItem("equityiq_user");
             const parsed = raw ? JSON.parse(raw) : null;
@@ -83,10 +82,12 @@ const Navbar = () => {
               parsed?.expiresAt || Date.now() + 7 * 24 * 60 * 60 * 1000;
             localStorage.setItem(
               "equityiq_user",
-              JSON.stringify({ user: data.user, expiresAt }),
+              JSON.stringify({ user: res.data.user, expiresAt }),
             );
             return;
           }
+        } catch (e) {
+          // fallback to stored user if fetch fails
         }
         // fallback to stored user if fetch fails
         setUser(storedUser);
@@ -119,9 +120,21 @@ const Navbar = () => {
     return firstChar ? firstChar.toUpperCase() : "?";
   };
 
-  const handleLogout = () => {
+  const { setAccessToken } = useAuth();
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (e) {
+      // ignore errors
+    }
     localStorage.removeItem("equityiq_user");
     window.dispatchEvent(new Event("equityiq_user_updated"));
+    setAccessToken(null);
+    // clear api client token
+    try {
+      const { clearAccessToken } = await import("../auth/apiClient");
+      clearAccessToken();
+    } catch {}
     setProfileOpen(false);
     toast.success("User logged out successfully");
   };
@@ -152,10 +165,7 @@ const Navbar = () => {
       const prevRaw = localStorage.getItem("equityiq_user");
       const prevAvatar = prevRaw ? JSON.parse(prevRaw)?.user?.avatarUrl : null;
 
-      const res = await axios.put(
-        "http://localhost:5000/api/auth/profile-image",
-        formData,
-      );
+      const res = await api.put("/auth/profile-image", formData);
 
       if (res.data?.user) {
         // Keep the original expiresAt from login, do not reset on profile update

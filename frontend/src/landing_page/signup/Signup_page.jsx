@@ -51,7 +51,7 @@ const Signup_page = () => {
       return;
     }
     const res = await sendOtp({
-      endpoint: "http://localhost:5000/api/auth/signup",
+      endpoint: "/auth/signup",
       payload: data,
       onSuccess: (data) => {
         setStage("verify");
@@ -65,7 +65,7 @@ const Signup_page = () => {
   const handleVerify = async (e) => {
     e.preventDefault();
     const res = await verifyOtp({
-      endpoint: "http://localhost:5000/api/auth/verify-email-otp",
+      endpoint: "/auth/verify-email-otp",
       payload: { email: form.email, otp },
       onSuccess: (data) => {
         setStage("done");

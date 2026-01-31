@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
+import api from "../auth/apiClient";
 import toast from "react-hot-toast";
 
 const Update_user_password = () => {
@@ -27,13 +28,10 @@ const Update_user_password = () => {
     }
     setIsSubmitting(true);
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/update-password",
-        {
-          email,
-          password: data.newPassword,
-        },
-      );
+      const res = await api.post("/auth/update-password", {
+        email,
+        password: data.newPassword,
+      });
       if (res.data?.success) {
         toast.success("Password updated successfully! Please login.");
         reset();

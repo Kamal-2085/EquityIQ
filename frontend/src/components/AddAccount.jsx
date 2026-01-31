@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import api from "../auth/apiClient";
 import toast from "react-hot-toast";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
@@ -33,13 +34,10 @@ const AddAccount = () => {
     if (!showOtp) {
       setSendingOtp(true);
       try {
-        const res = await axios.post(
-          "http://localhost:5000/api/auth/verify-bank-details",
-          {
-            mobile: data.mobileNumber,
-            accountHolderName: data.accountHolderName,
-          },
-        );
+        const res = await api.post("/auth/verify-bank-details", {
+          mobile: data.mobileNumber,
+          accountHolderName: data.accountHolderName,
+        });
         if (res.data && res.data.success) {
           toast.success("OTP sent to email");
           setShowOtp(true);
@@ -57,18 +55,15 @@ const AddAccount = () => {
     // OTP is shown, so verify OTP
     setVerifyingOtp(true);
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/verify-bank-otp",
-        {
-          mobile: data.mobileNumber,
-          otp: data.otp,
-          bankName: banks.find((b) => b.code === data.bankCode)?.name || "",
-          bankCode: data.bankCode,
-          accountHolderName: data.accountHolderName, // Only for verification, not storage
-          accountNumber: data.accountNumber,
-          ifscCode: data.ifscCode,
-        },
-      );
+      const res = await api.post("/auth/verify-bank-otp", {
+        mobile: data.mobileNumber,
+        otp: data.otp,
+        bankName: banks.find((b) => b.code === data.bankCode)?.name || "",
+        bankCode: data.bankCode,
+        accountHolderName: data.accountHolderName, // Only for verification, not storage
+        accountNumber: data.accountNumber,
+        ifscCode: data.ifscCode,
+      });
       if (res.data && res.data.success) {
         toast.success("Bank Account Verified Successfully");
         navigate("/");

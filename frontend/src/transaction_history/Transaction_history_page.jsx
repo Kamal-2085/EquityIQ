@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Header from "./Header.jsx";
 import axios from "axios";
+import api from "../auth/apiClient";
 
 const Transaction_history_page = () => {
   const [transactions, setTransactions] = useState([]);
@@ -20,9 +21,7 @@ const Transaction_history_page = () => {
         setTransactions([]);
         return;
       }
-      const res = await axios.get(
-        `http://localhost:5000/api/auth/me?email=${encodeURIComponent(email)}`,
-      );
+      const res = await api.get(`/auth/me?email=${encodeURIComponent(email)}`);
       const user = res.data?.user || {};
       setTransactions(user.transactionHistory || []);
     } catch (err) {

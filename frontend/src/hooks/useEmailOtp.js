@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import api from "../auth/apiClient";
 import toast from "react-hot-toast";
 
 const useEmailOtp = () => {
@@ -8,7 +9,7 @@ const useEmailOtp = () => {
   const sendOtp = async ({ endpoint, payload, onSuccess, successMessage }) => {
     try {
       setIsSubmitting(true);
-      const res = await axios.post(endpoint, payload);
+      const res = await api.post(endpoint, payload);
       const toastId = "otp-send";
       // Ensure we don't stack previous toasts
       toast.dismiss(toastId);
@@ -43,7 +44,7 @@ const useEmailOtp = () => {
       // Fallback: try a raw fetch in case axios fails while the server did
       // respond successfully (some proxies / dev setups cause axios to throw).
       try {
-        const fetchRes = await fetch(endpoint, {
+        const fetchRes = await fetch(`/api${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -83,7 +84,7 @@ const useEmailOtp = () => {
   }) => {
     try {
       setIsSubmitting(true);
-      const res = await axios.post(endpoint, payload);
+      const res = await api.post(endpoint, payload);
       // Only show a toast if successMessage is provided (handled in caller for custom message)
       if (successMessage) {
         toast.success(successMessage, { id: "otp-verify" });

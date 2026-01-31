@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { useForm } from "react-hook-form";
-import axios from "axios";
+import api from "../auth/apiClient";
+import { useAuth } from "../auth/AuthProvider";
+import { setAccessToken as setApiAccessToken } from "../auth/apiClient";
 import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -12,14 +14,21 @@ const Login_page = () => {
     handleSubmit,
     formState: { errors },
   } = useForm();
+  const { setAccessToken } = useAuth();
 
   const onSubmit = async (data) => {
     try {
       setIsSubmitting(true);
-      const res = await axios.post("http://localhost:5000/api/auth/login", {
+      const res = await api.post("/auth/login", {
         identifier: data.identifier,
         password: data.password,
       });
+
+      // store access token in auth context and api client
+      if (res.data?.accessToken) {
+        setAccessToken(res.data.accessToken);
+        setApiAccessToken(res.data.accessToken);
+      }
 
       if (res.data?.user) {
         const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -93,10 +102,14 @@ const Login_page = () => {
           </button>
         </form>
         <div className="mt-4 text-center">
-          <div
-            className=" text-sm"
-          >
-            Forgot password? <Link to="/forgot-password" className="text-blue-600 hover:underline">click here</Link>
+          <div className=" text-sm">
+            Forgot password?{" "}
+            <Link
+              to="/forgot-password"
+              className="text-blue-600 hover:underline"
+            >
+              click here
+            </Link>
           </div>
         </div>
       </div>

@@ -5,6 +5,8 @@ import toast from "react-hot-toast";
 import ProfileMenu from "../components/ProfileMenu.jsx";
 import img8 from "../assets/img8.png";
 import axios from "axios";
+import api from "../auth/apiClient";
+import { useAuth } from "../auth/AuthProvider";
 const PulseNavbar = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -54,7 +56,7 @@ const PulseNavbar = () => {
 
     const fetchMarketData = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/market/indices");
+        const res = await api.get("/market/indices");
         setMarketData({
           nifty: res.data?.nifty || null,
           sensex: res.data?.sensex || null,
@@ -112,9 +114,18 @@ const PulseNavbar = () => {
   const changeClass = (value) =>
     value !== null && value >= 0 ? "text-green-600" : "text-red-500";
 
-  const handleLogout = () => {
+  const { setAccessToken } = useAuth();
+  const handleLogout = async () => {
+    try {
+      await api.post("/auth/logout");
+    } catch (e) {}
     localStorage.removeItem("equityiq_user");
     window.dispatchEvent(new Event("equityiq_user_updated"));
+    setAccessToken(null);
+    try {
+      const { clearAccessToken } = await import("../auth/apiClient");
+      clearAccessToken();
+    } catch {}
     setProfileOpen(false);
     toast.success("User logged out successfully");
     navigate("/");
@@ -143,10 +154,7 @@ const PulseNavbar = () => {
 
     try {
       setIsUploading(true);
-      const res = await axios.put(
-        "http://localhost:5000/api/auth/profile-image",
-        formData,
-      );
+      const res = await api.put("/auth/profile-image", formData);
 
       if (res.status === 200 && res.data?.user) {
         const raw = localStorage.getItem("equityiq_user");

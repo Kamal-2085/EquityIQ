@@ -35,7 +35,7 @@ const Right3 = ({ bankName, bankCode, accountNumber, balance }) => {
       return;
     }
     await sendOtp({
-      endpoint: "http://localhost:5000/api/auth/send-payment-otp",
+      endpoint: "/auth/send-payment-otp",
       payload: { email, amount: Number(amount), type: "withdraw" },
       onSuccess: () => setShowOtpInput(true),
       successMessage: "OTP sent to email",
@@ -54,7 +54,7 @@ const Right3 = ({ bankName, bankCode, accountNumber, balance }) => {
       return;
     }
     await verifyOtp({
-      endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
+      endpoint: "/auth/verify-payment-otp",
       payload: { email, otp, amount: Number(amount), type: "withdraw" },
       successMessage: "OTP verified. Withdrawal will be processed.",
       onSuccess: (data) => {

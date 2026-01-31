@@ -42,19 +42,16 @@ const Right2 = ({ onBack, amount }) => {
     setTxnIdError("");
     try {
       // Store transaction in backend
-      const response = await fetch(
-        "http://localhost:5000/api/auth/submit-upi-transaction",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, txnId: normalizedTxnId, amount }),
-        },
-      );
-      const data = await response.json();
-      if (response.ok) {
+      const res = await api.post("/auth/submit-upi-transaction", {
+        email,
+        txnId: normalizedTxnId,
+        amount,
+      });
+      const data = res.data;
+      if (res.status >= 200 && res.status < 300) {
         // Now send OTP to email (include txnId so backend can create/verify pending txn)
         await sendOtp({
-          endpoint: "http://localhost:5000/api/auth/send-payment-otp",
+          endpoint: "/auth/send-payment-otp",
           payload: { email, amount, txnId: normalizedTxnId, type: "add" },
           onSuccess: () => setOtpSent(true),
           successMessage: "OTP sent to email",
@@ -83,7 +80,7 @@ const Right2 = ({ onBack, amount }) => {
     }
     setOtpError("");
     await verifyOtp({
-      endpoint: "http://localhost:5000/api/auth/verify-payment-otp",
+      endpoint: "/auth/verify-payment-otp",
       payload: { email, otp: normalizedOtp, amount, type: "add" },
       successMessage: "OTP verified. Payment will be confirmed shortly",
       onSuccess: (data) => {

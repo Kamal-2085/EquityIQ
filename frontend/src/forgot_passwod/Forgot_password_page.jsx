@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import api from "../auth/apiClient";
 import toast from "react-hot-toast";
 const Forgot_password_page = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -18,12 +19,9 @@ const Forgot_password_page = () => {
   const handleSendOtp = async (data) => {
     setIsSubmitting(true);
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/send-password-otp",
-        {
-          email: data.identifier,
-        },
-      );
+      const res = await api.post("/auth/send-password-otp", {
+        email: data.identifier,
+      });
       if (res.data?.otpSent || res.data?.otpPreview) {
         toast.success("OTP sent to email");
         setEmail(data.identifier);
@@ -42,13 +40,10 @@ const Forgot_password_page = () => {
   const handleVerifyOtp = async (data) => {
     setIsSubmitting(true);
     try {
-      const res = await axios.post(
-        "http://localhost:5000/api/auth/verify-password-otp",
-        {
-          email,
-          otp: data.otp,
-        },
-      );
+      const res = await api.post("/auth/verify-password-otp", {
+        email,
+        otp: data.otp,
+      });
       if (res.data?.verified) {
         toast.success("OTP verified. You can now update your password.");
         navigate("/forgot-password/update", { state: { email } });

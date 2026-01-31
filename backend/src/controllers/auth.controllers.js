@@ -11,6 +11,24 @@ import {
 import { sendWelcomeEmail } from "../config/mailer.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
+import jwt from "jsonwebtoken";
+
+const ACCESS_EXP = process.env.ACCESS_EXP || "15m";
+const REFRESH_EXP_SECONDS = process.env.REFRESH_EXP_SECONDS
+  ? Number(process.env.REFRESH_EXP_SECONDS)
+  : 7 * 24 * 60 * 60; // 7 days
+
+function createAccessToken(payload) {
+  return jwt.sign(payload, process.env.ACCESS_SECRET || "access_secret", {
+    expiresIn: ACCESS_EXP,
+  });
+}
+
+function createRefreshToken(payload) {
+  return jwt.sign(payload, process.env.REFRESH_SECRET || "refresh_secret", {
+    expiresIn: REFRESH_EXP_SECONDS,
+  });
+}
 
 // Store UPI Transaction ID for user
 export const submitUpiTransaction = async (req, res) => {
@@ -663,8 +681,24 @@ export const login = async (req, res) => {
       return res.status(403).json({ message: "Email not verified" });
     }
 
+    // Create tokens and set refresh cookie (7 days)
+    const accessToken = createAccessToken({ userId: user._id });
+    const refreshToken = createRefreshToken({ userId: user._id });
+
+    user.refreshTokens = user.refreshTokens || [];
+    user.refreshTokens.push(refreshToken);
+    await user.save();
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: REFRESH_EXP_SECONDS * 1000,
+    });
+
     return res.status(200).json({
       message: "Login successful",
+      accessToken,
       user: {
         id: user._id,
         name: user.name,
@@ -677,6 +711,77 @@ export const login = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const token = req.cookies?.refreshToken;
+    if (!token) return res.status(401).json({ message: "No token" });
+    let payload;
+    try {
+      payload = jwt.verify(
+        token,
+        process.env.REFRESH_SECRET || "refresh_secret",
+      );
+    } catch (err) {
+      return res.status(401).json({ message: "Invalid refresh token" });
+    }
+    const user = await User.findById(payload.userId);
+    if (!user) return res.status(401).json({ message: "User not found" });
+    if (!user.refreshTokens || !user.refreshTokens.includes(token)) {
+      return res.status(401).json({ message: "Refresh token revoked" });
+    }
+
+    // Rotate refresh token: issue a new one and replace the old
+    const accessToken = createAccessToken({ userId: user._id });
+    const newRefreshToken = createRefreshToken({ userId: user._id });
+
+    user.refreshTokens = (user.refreshTokens || []).filter((t) => t !== token);
+    user.refreshTokens.push(newRefreshToken);
+    await user.save();
+
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: REFRESH_EXP_SECONDS * 1000,
+    });
+
+    return res.status(200).json({ accessToken });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const logout = async (req, res) => {
+  try {
+    const token = req.cookies?.refreshToken;
+    if (token) {
+      try {
+        const payload = jwt.verify(
+          token,
+          process.env.REFRESH_SECRET || "refresh_secret",
+        );
+        const user = await User.findById(payload.userId);
+        if (user) {
+          user.refreshTokens = (user.refreshTokens || []).filter(
+            (t) => t !== token,
+          );
+          await user.save();
+        }
+      } catch (e) {
+        // ignore invalid token on logout
+      }
+    }
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    });
+    return res.sendStatus(200);
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

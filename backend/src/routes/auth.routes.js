@@ -4,6 +4,8 @@ import {
   signup,
   verifyEmailOtp,
   login,
+  refreshAccessToken,
+  logout,
   updateProfileImage,
   sendPaymentOtp,
   verifyPaymentOtp,
@@ -40,6 +42,8 @@ router.post("/send-payment-otp", sendPaymentOtp);
 router.post("/verify-payment-otp", verifyPaymentOtp);
 router.post("/verify-email-otp", verifyEmailOtp);
 router.post("/login", login);
+router.post("/refresh", refreshAccessToken);
+router.post("/logout", logout);
 router.put("/profile-image", upload.single("image"), updateProfileImage);
 router.post("/send-password-otp", sendPasswordOtp);
 router.post("/verify-password-otp", verifyPasswordOtp);
