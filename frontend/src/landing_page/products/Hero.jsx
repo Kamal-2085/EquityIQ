@@ -30,7 +30,7 @@ const Hero = () => {
             <img src={img16} alt="Download on the App Store" className="h-12" />
           </a>
         </div>
-        <div className="flex justify-center">
+        <div className="flex justify-center pt-20">
           <span className="block w-full max-w-3xl h-px bg-gray-200"></span>
         </div>
       </div>

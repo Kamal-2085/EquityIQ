@@ -28,6 +28,7 @@ import AddAccount from "./components/AddAccount.jsx";
 import Forgot_password_page from "./forgot_passwod/Forgot_password_page.jsx";
 import Update_user_password from "./forgot_passwod/Update_user_password.jsx";
 import Transaction_history_page from "./transaction_history/Transaction_history_page.jsx";
+import Policies from "./policies/Policies.jsx";
 const LandingLayout = () => (
   <>
     <Navbar />
@@ -66,6 +67,7 @@ const App = () => {
             element={<Update_user_password />}
           />
           <Route path="*" element={<Not_found />} />
+          <Route path="/policies" element={<Policies />} />
         </Route>
 
         <Route path="/pulse" element={<PulseLayout />}>

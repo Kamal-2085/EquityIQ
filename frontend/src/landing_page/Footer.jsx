@@ -296,7 +296,7 @@ const Footer = () => {
                 <Link to="/TermsAndConditions">Terms & conditions</Link>
               </li>
               <li className="hover:text-blue-600 cursor-pointer">
-                Policies & procedures
+                <Link to="/policies">Policies & procedures</Link>
               </li>
               <li className="hover:text-blue-600 cursor-pointer">
                 <Link to="/privacy">Privacy policy</Link>
