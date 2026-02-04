@@ -1,5 +1,6 @@
 import express from "express";
 import YahooFinance from "yahoo-finance2";
+import Stock from "../models/Stock.model.js";
 
 const router = express.Router();
 const yahooFinance = new YahooFinance({
@@ -232,6 +233,89 @@ router.get("/quotes", async (req, res) => {
   } catch (error) {
     console.error("Yahoo Finance quote failed:", error?.message || error);
     return res.status(500).json({ message: "Failed to fetch quotes" });
+  }
+});
+
+router.get("/nifty50", async (req, res) => {
+  try {
+    const data = await yahooFinance.screener({
+      scrIds: "nifty_50",
+      count: 100,
+      start: 0,
+    });
+
+    const quotes =
+      data?.quotes || data?.nifty_50?.quotes || data?.nifty_50 || [];
+
+    const items = (Array.isArray(quotes) ? quotes : [])
+      .map((quote) => {
+        const symbol = String(quote?.symbol || "").trim();
+        const name = String(
+          quote?.shortName || quote?.longName || quote?.name || symbol,
+        ).trim();
+        const nse = symbol || null;
+        const bse = symbol?.endsWith(".NS")
+          ? symbol.replace(/\.NS$/i, ".BO")
+          : null;
+        return {
+          name: name || symbol,
+          nse,
+          bse,
+          exchange: quote?.exchange || quote?.exchDisp || null,
+        };
+      })
+      .filter((item) => item.name || item.nse || item.bse);
+
+    const seenKeys = new Set();
+    const deduped = [];
+    items.forEach((item) => {
+      const key = String(item.nse || item.bse || item.name || "")
+        .trim()
+        .toUpperCase();
+      if (!key || seenKeys.has(key)) return;
+      seenKeys.add(key);
+      deduped.push(item);
+    });
+
+    return res.json({
+      results: deduped,
+      source: "Yahoo Finance",
+    });
+  } catch (error) {
+    console.error(
+      "Yahoo Finance NIFTY 50 fetch failed:",
+      error?.message || error,
+    );
+    return res.status(500).json({ message: "Failed to fetch NIFTY 50 list" });
+  }
+});
+
+router.get("/stocks/:symbol", async (req, res) => {
+  try {
+    const rawSymbol = String(req.params.symbol || "").trim();
+    if (!rawSymbol) {
+      return res.status(400).json({ message: "symbol is required" });
+    }
+    const baseSymbol = rawSymbol.replace(/\.NS$|\.BO$/i, "").toUpperCase();
+    const stock = await Stock.findOne({
+      symbol: baseSymbol,
+      isActive: true,
+    }).select("symbol name exchange domain isNifty50");
+
+    if (!stock) {
+      return res.status(404).json({ message: "Stock not found" });
+    }
+
+    return res.json({
+      symbol: stock.symbol,
+      name: stock.name,
+      exchange: stock.exchange,
+      domain: stock.domain || null,
+      isNifty50: Boolean(stock.isNifty50),
+    });
+  } catch (error) {
+    console.error("Stock fetch failed:", error?.message || error);
+    return res.status(500).json({ message: "Failed to fetch stock" });
   }
 });
 

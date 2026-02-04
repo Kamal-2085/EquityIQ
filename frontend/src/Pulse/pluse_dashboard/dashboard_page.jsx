@@ -107,7 +107,10 @@ const DashboardPage = () => {
   const [currentPage, setPage] = useState(1);
   const [listType, setListType] = useState("NIFTY 50");
   const { watchlist, setWatchlist } = useWatchlist();
+  const [stocks, setStocks] = useState(STOCKS);
   const [selectedStock, setSelectedStock] = useState(null);
+  const [stockMeta, setStockMeta] = useState(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [quoteData, setQuoteData] = useState({
     nse: null,
     bse: null,
@@ -122,6 +125,14 @@ const DashboardPage = () => {
 
   const getStockKey = (stock) =>
     stock.nse || stock.bse || stock.symbol || stock.name;
+
+  const getBaseSymbol = (stock) => {
+    const rawSymbol =
+      stock?.nse || stock?.bse || stock?.symbol || stock?.name || "";
+    return String(rawSymbol)
+      .replace(/\.NS$|\.BO$/i, "")
+      .toUpperCase();
+  };
 
   const isInWatchlist = (stock) => {
     const key = getStockKey(stock);
@@ -145,14 +156,67 @@ const DashboardPage = () => {
   };
 
   const filteredStocks = useMemo(() => {
-    const baseList = isWatchlist ? watchlist : STOCKS;
+    const baseList = isWatchlist ? watchlist : stocks;
     const term = query.trim().toLowerCase();
     if (!term) return baseList;
     return baseList.filter((stock) => {
       const haystack = `${stock.name} ${stock.nse} ${stock.bse}`.toLowerCase();
       return haystack.includes(term);
     });
-  }, [query, isWatchlist, watchlist]);
+  }, [query, isWatchlist, watchlist, stocks]);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadNifty = async () => {
+      try {
+        const res = await axios.get("/api/market/nifty50");
+        if (!isActive) return;
+        const list = Array.isArray(res.data?.results) ? res.data.results : [];
+        if (list.length > 0) setStocks(list);
+      } catch {
+        // keep fallback list
+      }
+    };
+    loadNifty();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    setStockMeta(null);
+    setLogoFailed(false);
+
+    if (!selectedStock)
+      return () => {
+        isActive = false;
+      };
+
+    const baseSymbol = getBaseSymbol(selectedStock);
+    if (!baseSymbol)
+      return () => {
+        isActive = false;
+      };
+
+    const loadMeta = async () => {
+      try {
+        const res = await axios.get(
+          `/api/market/stocks/${encodeURIComponent(baseSymbol)}`,
+        );
+        if (!isActive) return;
+        setStockMeta(res.data || null);
+      } catch {
+        if (!isActive) return;
+        setStockMeta(null);
+      }
+    };
+
+    loadMeta();
+    return () => {
+      isActive = false;
+    };
+  }, [selectedStock]);
 
   const isUsingTempResult =
     !isWatchlist && query.trim().length > 0 && filteredStocks.length === 0;
@@ -301,6 +365,8 @@ const DashboardPage = () => {
   const closeModal = () => {
     setSelectedStock(null);
     setQuoteData({ nse: null, bse: null, loading: false, error: "" });
+    setStockMeta(null);
+    setLogoFailed(false);
   };
 
   const formatCurrency = (value) => {
@@ -321,6 +387,10 @@ const DashboardPage = () => {
     if (change < 0) return "text-red-600";
     return "text-gray-500";
   };
+
+  const showLogo = Boolean(
+    stockMeta?.isNifty50 && stockMeta?.domain && !logoFailed,
+  );
 
   const listSelector = (
     <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1">
@@ -517,13 +587,30 @@ const DashboardPage = () => {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {selectedStock.name}
-                </h3>
-                <p className="text-xs text-gray-400">
-                  Live quotes • Refreshes every second
-                </p>
+              <div className="flex items-center gap-3">
+                {showLogo ? (
+                  <img
+                    src={`https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`}
+                    alt={selectedStock.name}
+                    className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain"
+                    onError={() => setLogoFailed(true)}
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-200 text-sm font-semibold text-gray-700">
+                    {String(selectedStock?.name || "?")
+                      .trim()
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {selectedStock.name}
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    Live quotes • Refreshes every second
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
