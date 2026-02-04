@@ -37,6 +37,7 @@ const AddAccount = () => {
         const res = await api.post("/auth/verify-bank-details", {
           mobile: data.mobileNumber,
           accountHolderName: data.accountHolderName,
+          accountNumber: data.accountNumber,
         });
         if (res.data && res.data.success) {
           toast.success("OTP sent to email");

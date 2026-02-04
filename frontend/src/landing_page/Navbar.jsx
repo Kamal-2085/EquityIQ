@@ -214,9 +214,7 @@ const Navbar = () => {
   const handleSignupClick = (e) => {
     if (isLoggedIn) {
       e.preventDefault();
-      toast.error("You are already Logged in. Please Logout first", {
-        icon: "❌",
-      });
+      toast.error("You are already Logged in. Please Logout first");
     }
   };
 

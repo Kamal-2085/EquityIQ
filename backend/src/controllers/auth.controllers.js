@@ -841,13 +841,22 @@ export const updateProfileImage = async (req, res) => {
 // Get user and verify bank details by mobile only
 export const verifyBankDetails = async (req, res) => {
   try {
-    const { mobile, accountHolderName } = req.body;
-    if (!mobile || !accountHolderName) {
+    const { mobile, accountHolderName, accountNumber } = req.body;
+    if (!mobile || !accountHolderName || !accountNumber) {
       return res.status(400).json({ toast: "All fields are required." });
     }
+    const normalizedAccountNumber = String(accountNumber).trim();
     const user = await User.findOne({ phone: mobile });
     if (!user) {
       return res.status(404).json({ toast: "User not found." });
+    }
+    const existingAccount = await User.findOne({
+      "bankAccount.accountNumber": normalizedAccountNumber,
+    }).select("_id");
+    if (existingAccount && String(existingAccount._id) !== String(user._id)) {
+      return res
+        .status(409)
+        .json({ toast: "Account number already linked to another user." });
     }
     if (
       mobile !== user.phone ||

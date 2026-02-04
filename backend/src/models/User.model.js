@@ -71,4 +71,9 @@ const userSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+userSchema.index(
+  { "bankAccount.accountNumber": 1 },
+  { unique: true, sparse: true },
+);
+
 export default mongoose.model("User", userSchema);
