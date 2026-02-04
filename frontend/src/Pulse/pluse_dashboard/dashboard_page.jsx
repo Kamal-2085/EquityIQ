@@ -271,7 +271,18 @@ const DashboardPage = () => {
           };
         });
 
-        setTempResults(mappedResults);
+        const dedupedResults = [];
+        const seenKeys = new Set();
+        mappedResults.forEach((item) => {
+          const key = String(item.nse || item.bse || item.name || "")
+            .trim()
+            .toUpperCase();
+          if (!key || seenKeys.has(key)) return;
+          seenKeys.add(key);
+          dedupedResults.push(item);
+        });
+
+        setTempResults(dedupedResults);
         setSearchLoading(false);
       } catch (error) {
         if (!isActive) return;
