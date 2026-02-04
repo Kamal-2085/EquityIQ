@@ -10,7 +10,6 @@ import img12 from "../assets/img12.avif";
 import img13 from "../assets/img13.png";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import axios from "axios";
 import api from "../auth/apiClient";
 import { useAuth } from "../auth/AuthProvider";
 import ProfileMenu from "../components/ProfileMenu.jsx";

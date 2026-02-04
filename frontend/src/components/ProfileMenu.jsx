@@ -1,6 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
-
+import { Link, useNavigate } from "react-router-dom";
 const ProfileMenu = ({
   user,
   profileMenuRef,
@@ -24,6 +23,18 @@ const ProfileMenu = ({
   const avatarSrc = user?.avatarUrl
     ? `${user.avatarUrl}?cb=${avatarCacheBuster}`
     : undefined;
+
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      if (onLogout) await onLogout();
+    } catch (e) {
+      // ignore errors from logout handler but still navigate
+    } finally {
+      navigate("/");
+    }
+  };
 
   return (
     <div
@@ -83,7 +94,7 @@ const ProfileMenu = ({
       <div className="px-4 py-3 border-t border-gray-100">
         <button
           type="button"
-          onClick={onLogout}
+          onClick={handleLogout}
           className="text-sm font-medium text-gray-600 hover:text-gray-800 cursor-pointer"
         >
           Log out
