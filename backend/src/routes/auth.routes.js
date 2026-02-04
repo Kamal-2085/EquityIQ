@@ -15,8 +15,11 @@ import {
   verifyBankDetails,
   verifyBankOtp,
   submitUpiTransaction,
+  getWatchlist,
+  updateWatchlist,
 } from "../controllers/auth.controllers.js";
 import upload from "../middleware/multer.js";
+import requireAuth from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -52,5 +55,8 @@ router.post("/verify-bank-details", verifyBankDetails);
 
 router.post("/submit-upi-transaction", submitUpiTransaction);
 router.post("/verify-bank-otp", verifyBankOtp);
+
+router.get("/watchlist", requireAuth, getWatchlist);
+router.post("/watchlist", requireAuth, updateWatchlist);
 
 export default router;

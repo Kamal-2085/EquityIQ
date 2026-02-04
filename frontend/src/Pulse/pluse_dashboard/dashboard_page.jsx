@@ -5,6 +5,7 @@ import { FaCartPlus } from "react-icons/fa";
 import img46 from "../../assets/img46.png";
 import HeroSection from "./HeroSection.jsx";
 import toast from "react-hot-toast";
+import { useWatchlist } from "./Watchlist.jsx";
 
 const STOCKS = [
   { name: "Reliance Industries Ltd", nse: "RELIANCE.NS", bse: "RELIANCE.BO" },
@@ -105,8 +106,7 @@ const DashboardPage = () => {
   const [query, setQuery] = useState("");
   const [currentPage, setPage] = useState(1);
   const [listType, setListType] = useState("NIFTY 50");
-  const [userKey, setUserKey] = useState("guest");
-  const [watchlist, setWatchlist] = useState([]);
+  const { watchlist, setWatchlist } = useWatchlist();
   const [selectedStock, setSelectedStock] = useState(null);
   const [quoteData, setQuoteData] = useState({
     nse: null,
@@ -119,47 +119,6 @@ const DashboardPage = () => {
   const [searchError, setSearchError] = useState("");
 
   const isWatchlist = listType === "WATCHLIST";
-
-  const resolveUserKey = () => {
-    const raw = localStorage.getItem("equityiq_user");
-    if (!raw) return "guest";
-    try {
-      const parsed = JSON.parse(raw);
-      const user = parsed?.user;
-      return user?.id || user?.email || "guest";
-    } catch {
-      return "guest";
-    }
-  };
-
-  useEffect(() => {
-    const loadUserKey = () => setUserKey(resolveUserKey());
-    loadUserKey();
-    const handleUserUpdate = () => loadUserKey();
-    window.addEventListener("equityiq_user_updated", handleUserUpdate);
-    return () =>
-      window.removeEventListener("equityiq_user_updated", handleUserUpdate);
-  }, []);
-
-  useEffect(() => {
-    const storageKey = `equityiq_watchlist_${userKey}`;
-    const raw = localStorage.getItem(storageKey);
-    if (!raw) {
-      setWatchlist([]);
-      return;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      setWatchlist(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setWatchlist([]);
-    }
-  }, [userKey]);
-
-  useEffect(() => {
-    const storageKey = `equityiq_watchlist_${userKey}`;
-    localStorage.setItem(storageKey, JSON.stringify(watchlist));
-  }, [watchlist, userKey]);
 
   const getStockKey = (stock) =>
     stock.nse || stock.bse || stock.symbol || stock.name;

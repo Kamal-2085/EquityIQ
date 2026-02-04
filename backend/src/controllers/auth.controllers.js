@@ -940,3 +940,69 @@ export const verifyBankOtp = async (req, res) => {
       .json({ toast: "Server error", error: error.message });
   }
 };
+
+export const getWatchlist = async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const user = await User.findById(userId).select("stocks_watchlist");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(200).json({ watchlist: user.stocks_watchlist || [] });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const updateWatchlist = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { watchlist } = req.body;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!Array.isArray(watchlist)) {
+      return res.status(400).json({ message: "Watchlist is required" });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const cleaned = watchlist
+      .map((item) => {
+        const name = item?.name ? String(item.name).trim() : "";
+        const nse = item?.nse ? String(item.nse).trim() : "";
+        const bse = item?.bse ? String(item.bse).trim() : "";
+        const exchange = item?.exchange ? String(item.exchange).trim() : "";
+        return {
+          name,
+          nse: nse || undefined,
+          bse: bse || undefined,
+          exchange: exchange || undefined,
+        };
+      })
+      .filter((item) => item.name || item.nse || item.bse);
+
+    const seenKeys = new Set();
+    const deduped = [];
+    cleaned.forEach((item) => {
+      const key = String(item.nse || item.bse || item.name || "")
+        .trim()
+        .toUpperCase();
+      if (!key || seenKeys.has(key)) return;
+      seenKeys.add(key);
+      deduped.push(item);
+    });
+
+    user.stocks_watchlist = deduped;
+    await user.save();
+
+    return res.status(200).json({ success: true, watchlist: deduped });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};

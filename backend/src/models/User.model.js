@@ -55,6 +55,17 @@ const userSchema = new mongoose.Schema(
       bankName: { type: String },
       bankCode: { type: String }, // e.g. HDFC, SBI, ICICI
     },
+    stocks_watchlist: {
+      type: [
+        {
+          name: { type: String, trim: true },
+          nse: { type: String, trim: true },
+          bse: { type: String, trim: true },
+          exchange: { type: String, trim: true },
+        },
+      ],
+      default: [],
+    },
     avatarUrl: {
       type: String,
       default: null,
