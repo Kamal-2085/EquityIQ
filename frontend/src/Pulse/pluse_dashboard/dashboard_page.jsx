@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { IoIosAddCircle, IoIosRemoveCircle } from "react-icons/io";
-import { FaCartPlus } from "react-icons/fa";
+import { FaCartPlus, FaArrowRight } from "react-icons/fa";
+import { Link } from "react-router-dom";
 import img46 from "../../assets/img46.png";
 import HeroSection from "./HeroSection.jsx";
 import toast from "react-hot-toast";
@@ -101,6 +102,7 @@ const STOCKS = [
 ];
 
 const PAGE_SIZE = 10;
+const getCompanyPath = (name) => `/pulse/${encodeURIComponent(name || "")}`;
 
 const DashboardPage = () => {
   const [query, setQuery] = useState("");
@@ -651,8 +653,15 @@ const DashboardPage = () => {
               ))}
             </div>
 
-            <div className="border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
-              {quoteData.error ? quoteData.error : ""}
+            <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
+              <span>{quoteData.error ? quoteData.error : ""}</span>
+              <Link
+                to={getCompanyPath(selectedStock.name)}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+              >
+                View More Details
+                <FaArrowRight className="h-3 w-3" />
+              </Link>
             </div>
           </div>
         </div>

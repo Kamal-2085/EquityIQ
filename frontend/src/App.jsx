@@ -23,6 +23,7 @@ import InvestorCharterPage from "./landing_page/investor_charter/Investor-charte
 import Disclosure from "./landing_page/disclosure.jsx";
 import PulseLayout from "./Pulse/PulseLayout.jsx";
 import PulseDashboard from "./Pulse/pluse_dashboard/dashboard_page.jsx";
+import CompanyDetails from "./Pulse/pluse_dashboard/CompanyDetails.jsx";
 import AccountPage from "./account_balance/account_page.jsx";
 import AddAccount from "./components/AddAccount.jsx";
 import Forgot_password_page from "./forgot_passwod/Forgot_password_page.jsx";
@@ -61,7 +62,10 @@ const App = () => {
           <Route path="/account-balance" element={<AccountPage />} />
           <Route path="/add-account" element={<AddAccount />} />
           <Route path="/forgot-password" element={<Forgot_password_page />} />
-          <Route path="/add-account/transaction-history" element={<Transaction_history_page />} />
+          <Route
+            path="/add-account/transaction-history"
+            element={<Transaction_history_page />}
+          />
           <Route
             path="/forgot-password/update"
             element={<Update_user_password />}
@@ -72,6 +76,7 @@ const App = () => {
 
         <Route path="/pulse" element={<PulseLayout />}>
           <Route index element={<PulseDashboard />} />
+          <Route path=":company_name" element={<CompanyDetails />} />
         </Route>
       </Routes>
     </>
