@@ -102,7 +102,12 @@ const STOCKS = [
 ];
 
 const PAGE_SIZE = 10;
-const getCompanyPath = (name) => `/pulse/${encodeURIComponent(name || "")}`;
+const getCompanyPath = (name, symbol) => {
+  const base = `/pulse/${encodeURIComponent(name || "")}`;
+  if (!symbol) return base;
+  const params = new URLSearchParams({ symbol });
+  return `${base}?${params.toString()}`;
+};
 
 const DashboardPage = () => {
   const [query, setQuery] = useState("");
@@ -656,7 +661,10 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
               <span>{quoteData.error ? quoteData.error : ""}</span>
               <Link
-                to={getCompanyPath(selectedStock.name)}
+                to={getCompanyPath(
+                  selectedStock.name,
+                  selectedStock.nse || selectedStock.bse,
+                )}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
               >
                 View More Details

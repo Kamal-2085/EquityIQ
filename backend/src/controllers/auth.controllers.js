@@ -7,8 +7,8 @@ import {
   sendAddMoneyEmail,
   sendBankAccountAddedEmail,
   sendWithdrawalRequestEmail,
-} from "../config/mailer.js";
-import { sendWelcomeEmail } from "../config/mailer.js";
+  sendWelcomeEmail,
+} from "../services/mails.services.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
 import jwt from "jsonwebtoken";

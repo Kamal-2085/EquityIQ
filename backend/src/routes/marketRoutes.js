@@ -1,12 +1,36 @@
 import express from "express";
 import YahooFinance from "yahoo-finance2";
 import Stock from "../models/Stock.model.js";
-
+import { getChartData } from "../services/yahoo.services.js";
 const router = express.Router();
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
 });
+router.get("/chart/:symbol", async (req, res) => {
+  try {
+    const symbol = req.params.symbol;
+    const range = req.query.range || "1mo";
+    const interval = req.query.interval || "5m";
 
+    if (!symbol) {
+      return res.status(400).json({ message: "symbol is required" });
+    }
+
+    const data = await getChartData(symbol, range, interval);
+
+    return res.json({
+      symbol,
+      range,
+      interval,
+      data,
+      source: "Yahoo Finance",
+      disclaimer: "Delayed market data. For educational purposes only.",
+    });
+  } catch (error) {
+    console.error("Chart fetch failed:", error?.message || error);
+    return res.status(500).json({ message: "Failed to fetch chart data" });
+  }
+});
 router.get("/indices", async (req, res) => {
   try {
     const [sensex, nifty] = await Promise.all([
@@ -238,48 +262,20 @@ router.get("/quotes", async (req, res) => {
 
 router.get("/nifty50", async (req, res) => {
   try {
-    const data = await yahooFinance.screener({
-      scrIds: "nifty_50",
-      count: 100,
-      start: 0,
-    });
+    const stocks = await Stock.find({ isNifty50: true, isActive: true })
+      .select("symbol name exchange")
+      .sort({ name: 1 });
 
-    const quotes =
-      data?.quotes || data?.nifty_50?.quotes || data?.nifty_50 || [];
-
-    const items = (Array.isArray(quotes) ? quotes : [])
-      .map((quote) => {
-        const symbol = String(quote?.symbol || "").trim();
-        const name = String(
-          quote?.shortName || quote?.longName || quote?.name || symbol,
-        ).trim();
-        const nse = symbol || null;
-        const bse = symbol?.endsWith(".NS")
-          ? symbol.replace(/\.NS$/i, ".BO")
-          : null;
-        return {
-          name: name || symbol,
-          nse,
-          bse,
-          exchange: quote?.exchange || quote?.exchDisp || null,
-        };
-      })
-      .filter((item) => item.name || item.nse || item.bse);
-
-    const seenKeys = new Set();
-    const deduped = [];
-    items.forEach((item) => {
-      const key = String(item.nse || item.bse || item.name || "")
-        .trim()
-        .toUpperCase();
-      if (!key || seenKeys.has(key)) return;
-      seenKeys.add(key);
-      deduped.push(item);
-    });
+    const results = stocks.map((stock) => ({
+      name: stock.name,
+      nse: `${stock.symbol}.NS`,
+      bse: `${stock.symbol}.BO`,
+      exchange: stock.exchange,
+    }));
 
     return res.json({
-      results: deduped,
-      source: "Yahoo Finance",
+      results,
+      source: "Database",
     });
   } catch (error) {
     console.error(
