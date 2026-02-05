@@ -63,6 +63,23 @@ const StockChart = ({ data }) => {
   useEffect(() => {
     if (!seriesRef.current) return;
     const safeData = Array.isArray(data) ? data : [];
+    if (safeData.length > 1) {
+      const first = safeData[0]?.value;
+      const last = safeData[safeData.length - 1]?.value;
+      if (
+        first !== null &&
+        last !== null &&
+        first !== undefined &&
+        last !== undefined
+      ) {
+        const isDown = last < first;
+        seriesRef.current.applyOptions({
+          lineColor: isDown ? "#dc2626" : "#16a34a",
+          topColor: isDown ? "rgba(220,38,38,0.35)" : "rgba(22,163,74,0.4)",
+          bottomColor: isDown ? "rgba(220,38,38,0.05)" : "rgba(22,163,74,0.05)",
+        });
+      }
+    }
     seriesRef.current.setData(safeData);
     chartRef.current?.timeScale().fitContent();
   }, [data]);
