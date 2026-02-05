@@ -8,7 +8,7 @@ const pendingTxnSchema = new mongoose.Schema(
     date: { type: Date, default: Date.now },
     txnType: {
       type: String,
-      enum: ["Add", "Withdraw", "OTPNotVerified"],
+      enum: ["Add", "Withdraw"],
       required: true,
     },
     status: { type: String, default: "pending" },

@@ -62,7 +62,7 @@ export const submitUpiTransaction = async (req, res) => {
         txnId: normalizedTxnId,
         amount: Number(amount),
         date: new Date(),
-        txnType: "OTPNotVerified",
+        txnType: "Add",
         status: "pending",
       });
     } catch (e) {
@@ -323,7 +323,7 @@ export const sendPaymentOtp = async (req, res) => {
             txnId: normalizedTxnId,
             amount: Number(amount) || 0,
             date: new Date(),
-            txnType: "OTPNotVerified",
+            txnType: "Add",
             status: "pending",
           });
         }
@@ -460,7 +460,7 @@ export const verifyPaymentOtp = async (req, res) => {
         if (type === "withdraw") {
           pendingQuery.txnType = "Withdraw";
         } else {
-          pendingQuery.txnType = { $in: ["Add", "OTPNotVerified"] };
+          pendingQuery.txnType = "Add";
         }
         pendingTxn = await PendingTransaction.findOne(pendingQuery).sort({
           createdAt: -1,
@@ -474,9 +474,6 @@ export const verifyPaymentOtp = async (req, res) => {
         generateTxnId(type === "withdraw" ? "wd" : "add");
 
       if (type === "withdraw") {
-        // For withdrawals, deduct
-        user.accountBalance = (user.accountBalance || 0) - parsedAmount;
-
         // Send withdrawal request email (include txnId)
         const dateTime = new Date().toLocaleString();
         let bankName = "-",
@@ -501,8 +498,7 @@ export const verifyPaymentOtp = async (req, res) => {
           console.error("Withdrawal request email send failed:", mailError);
         }
       } else {
-        // Default to 'add' behavior: credit the account
-        user.accountBalance = (user.accountBalance || 0) + parsedAmount;
+        // Default to 'add' behavior: send processing email only
         const dateTime = new Date().toLocaleString();
         try {
           await sendAddMoneyEmail({
@@ -528,7 +524,7 @@ export const verifyPaymentOtp = async (req, res) => {
           amount: parsedAmount,
           date: pendingTxn.date || new Date(),
           txnType: type === "withdraw" ? "Withdraw" : "Add",
-          status: "completed",
+          status: "hold",
           completedAt: new Date(),
         });
         try {
@@ -543,7 +539,7 @@ export const verifyPaymentOtp = async (req, res) => {
           amount: parsedAmount,
           date: new Date(),
           txnType: type === "withdraw" ? "Withdraw" : "Add",
-          status: "completed",
+          status: "hold",
           completedAt: new Date(),
         });
       }

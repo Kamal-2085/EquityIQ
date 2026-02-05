@@ -3,6 +3,14 @@ import { FaArrowTrendUp, FaArrowTrendDown } from "react-icons/fa6";
 
 const Transaction = ({ transaction }) => {
   const isAdd = String(transaction?.txnType || "").toLowerCase() === "add";
+  const status = String(transaction?.status || "").toLowerCase();
+  const statusLabel = status || "hold";
+  const statusDotClass =
+    statusLabel === "completed"
+      ? "bg-green-500"
+      : statusLabel === "rejected"
+      ? "bg-red-500"
+      : "bg-orange-500";
   const rawDate =
     transaction?.date ||
     transaction?.completedAt ||
@@ -37,13 +45,17 @@ const Transaction = ({ transaction }) => {
             isAdd ? "text-green-600" : "text-red-600"
           }`}
         >
-          {isAdd ? "+" : "-"}
-          {transaction.amount}
+          {isAdd ? "+" : "-"}₹{transaction.amount}
         </h3>
 
         <div className="flex items-center gap-1 text-xs text-gray-500">
           <span>Transaction ID:</span>
           <span className="font-mono text-gray-600">{transaction.txnId}</span>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span className={`h-2 w-2 rounded-full ${statusDotClass}`} />
+          <span className="capitalize">{statusLabel}</span>
         </div>
       </div>
     </div>
