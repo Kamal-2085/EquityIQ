@@ -16,13 +16,14 @@ router.get("/chart/:symbol", async (req, res) => {
       return res.status(400).json({ message: "symbol is required" });
     }
 
-    const data = await getChartData(symbol, range, interval);
+    const result = await getChartData(symbol, range, interval);
 
     return res.json({
       symbol,
       range,
       interval,
-      data,
+      data: result?.data || [],
+      meta: result?.meta || null,
       source: "Yahoo Finance",
       disclaimer: "Delayed market data. For educational purposes only.",
     });
@@ -38,6 +39,9 @@ router.get("/indices", async (req, res) => {
       yahooFinance.quote("^NSEI"),
     ]);
 
+    const sensexState = sensex?.marketState ?? null;
+    const niftyState = nifty?.marketState ?? null;
+
     return res.json({
       sensex: {
         name: "BSE Sensex",
@@ -45,6 +49,7 @@ router.get("/indices", async (req, res) => {
         change: sensex?.regularMarketChange ?? null,
         changePercent: sensex?.regularMarketChangePercent ?? null,
         time: sensex?.regularMarketTime ?? null,
+        marketState: sensexState,
       },
       nifty: {
         name: "Nifty 50",
@@ -52,7 +57,9 @@ router.get("/indices", async (req, res) => {
         change: nifty?.regularMarketChange ?? null,
         changePercent: nifty?.regularMarketChangePercent ?? null,
         time: nifty?.regularMarketTime ?? null,
+        marketState: niftyState,
       },
+      isMarketOpen: sensexState === "REGULAR" || niftyState === "REGULAR",
       source: "Yahoo Finance",
       disclaimer: "Delayed market data. For educational purposes only.",
     });

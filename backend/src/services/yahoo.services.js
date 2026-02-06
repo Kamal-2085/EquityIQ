@@ -42,8 +42,18 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
     candidates.push(`${normalizedSymbol}.NS`, `${normalizedSymbol}.BO`);
   }
 
-  const intervalsToTry = interval === "1d" ? ["1d"] : [interval, "1d"];
   const historicalIntervals = new Set(["1d", "1wk", "1mo"]);
+  const isIntraday = !historicalIntervals.has(interval);
+  const intradayFallbacks = {
+    "1m": "5m",
+    "5m": "15m",
+    "15m": "30m",
+    "30m": "1h",
+  };
+  const fallbackInterval = isIntraday ? intradayFallbacks[interval] : null;
+  const intervalsToTry = fallbackInterval
+    ? [interval, fallbackInterval]
+    : [interval];
   const safeHistoricalInterval = historicalIntervals.has(interval)
     ? interval
     : "1d";
@@ -60,10 +70,15 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
     }
   };
 
-  const fetchHistorical = async (symbolValue, intervalValue) => {
+  const fetchHistorical = async (
+    symbolValue,
+    intervalValue,
+    rangeValue = range,
+  ) => {
     try {
+      const fallbackPeriod1 = new Date(Date.now() - rangeToMs(rangeValue));
       return await yahooFinance.historical(symbolValue, {
-        period1,
+        period1: fallbackPeriod1,
         period2,
         interval: intervalValue,
       });
@@ -72,17 +87,40 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
     }
   };
 
-  for (const candidate of candidates) {
-    const historical = await fetchHistorical(candidate, safeHistoricalInterval);
-    if (Array.isArray(historical) && historical.length > 0) {
-      return historical
-        .map((point) => ({
-          time: point?.date
-            ? Math.floor(new Date(point.date).getTime() / 1000)
-            : null,
-          value: point?.close ?? null,
-        }))
-        .filter((point) => point.time && point.value !== null);
+  const mapHistorical = (historical) =>
+    historical
+      .map((point) => ({
+        time: point?.date
+          ? Math.floor(new Date(point.date).getTime() / 1000)
+          : null,
+        value: point?.close ?? null,
+      }))
+      .filter((point) => point.time && point.value !== null);
+
+  const mapChart = (timestamps, closes) =>
+    timestamps
+      .map((time, i) => ({
+        time,
+        value: closes[i],
+      }))
+      .filter((point) => point.value !== null && point.value !== undefined);
+
+  if (historicalIntervals.has(interval)) {
+    for (const candidate of candidates) {
+      const historical = await fetchHistorical(
+        candidate,
+        safeHistoricalInterval,
+      );
+      if (Array.isArray(historical) && historical.length > 0) {
+        return {
+          data: mapHistorical(historical),
+          meta: {
+            intradayFallback: false,
+            interval: safeHistoricalInterval,
+            range,
+          },
+        };
+      }
     }
   }
 
@@ -98,13 +136,61 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
     if (timestamps.length > 0) break;
   }
 
-  const quotes = result?.indicators?.quote?.[0];
-  const closes = quotes?.close || [];
+  if (timestamps.length > 0) {
+    const quotes = result?.indicators?.quote?.[0];
+    const closes = quotes?.close || [];
+    return {
+      data: mapChart(timestamps, closes),
+      meta: {
+        intradayFallback: false,
+        interval: result?.meta?.interval || interval,
+        range,
+      },
+    };
+  }
 
-  return timestamps
-    .map((time, i) => ({
-      time,
-      value: closes[i],
-    }))
-    .filter((point) => point.value !== null && point.value !== undefined);
+  if (isIntraday) {
+    const fallbackRange = range;
+    for (const candidate of candidates) {
+      const historical = await fetchHistorical(candidate, "1d", fallbackRange);
+      if (Array.isArray(historical) && historical.length > 0) {
+        return {
+          data: mapHistorical(historical),
+          meta: {
+            intradayFallback: true,
+            interval: "1d",
+            range: fallbackRange,
+          },
+        };
+      }
+    }
+  }
+
+  if (!isIntraday && timestamps.length === 0) {
+    for (const candidate of candidates) {
+      const historical = await fetchHistorical(
+        candidate,
+        safeHistoricalInterval,
+      );
+      if (Array.isArray(historical) && historical.length > 0) {
+        return {
+          data: mapHistorical(historical),
+          meta: {
+            intradayFallback: false,
+            interval: safeHistoricalInterval,
+            range,
+          },
+        };
+      }
+    }
+  }
+
+  return {
+    data: [],
+    meta: {
+      intradayFallback: false,
+      interval,
+      range,
+    },
+  };
 };

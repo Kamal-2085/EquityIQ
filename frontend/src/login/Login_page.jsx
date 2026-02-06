@@ -34,6 +34,7 @@ const Login_page = () => {
         const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
         const payload = { user: res.data.user, expiresAt };
         localStorage.setItem("equityiq_user", JSON.stringify(payload));
+        sessionStorage.removeItem("market-toast-shown");
         window.dispatchEvent(new Event("equityiq_user_updated"));
       }
 

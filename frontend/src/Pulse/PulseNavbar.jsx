@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import ProfileMenu from "../components/ProfileMenu.jsx";
 import img8 from "../assets/img8.png";
-import axios from "axios";
 import api from "../auth/apiClient";
 import { useAuth } from "../auth/AuthProvider";
 const PulseNavbar = () => {
@@ -120,6 +119,7 @@ const PulseNavbar = () => {
       await api.post("/auth/logout");
     } catch (e) {}
     localStorage.removeItem("equityiq_user");
+    sessionStorage.removeItem("market-toast-shown");
     window.dispatchEvent(new Event("equityiq_user_updated"));
     setAccessToken(null);
     try {

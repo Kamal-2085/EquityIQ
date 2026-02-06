@@ -127,6 +127,7 @@ const Navbar = () => {
       // ignore errors
     }
     localStorage.removeItem("equityiq_user");
+    sessionStorage.removeItem("market-toast-shown");
     window.dispatchEvent(new Event("equityiq_user_updated"));
     setAccessToken(null);
     // clear api client token

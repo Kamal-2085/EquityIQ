@@ -149,6 +149,8 @@ const CompanyDetails = () => {
     };
   }, [resolvedSymbol]);
 
+  const isIntradayTimeframe = timeframe === "1D" || timeframe === "1W";
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
       <div className="mb-6 flex items-center justify-between">
@@ -239,7 +241,9 @@ const CompanyDetails = () => {
           ) : error ? (
             <div className="text-sm text-red-500">{error}</div>
           ) : chartData.length === 0 ? (
-            <div className="text-sm text-gray-500">No chart data.</div>
+            <div className="text-sm text-gray-500">
+              {isIntradayTimeframe ? "No intraday data." : "No chart data."}
+            </div>
           ) : (
             <StockChart data={chartData} />
           )}
