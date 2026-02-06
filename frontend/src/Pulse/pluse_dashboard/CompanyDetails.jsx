@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import StockChart from "../../components/StockChart.jsx";
 import nseLogo from "../../assets/img46.png";
 import bseLogo from "../../assets/img54.jpg";
-
+import OrderPanel from "./OrderPanel.jsx";
 const TIMEFRAMES = {
   "1D": { range: "1d", interval: "1m" },
   "1W": { range: "5d", interval: "5m" },
@@ -175,128 +175,138 @@ const CompanyDetails = () => {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {stockMeta?.domain && !logoFailed ? (
-            <img
-              src={`https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`}
-              alt={decodedName || "Company"}
-              className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain"
-              onError={() => setLogoFailed(true)}
-            />
-          ) : (
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-200 text-sm font-semibold text-gray-700">
-              {String(decodedName || "?")
-                .trim()
-                .charAt(0)
-                .toUpperCase()}
-            </div>
-          )}
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
-              {decodedName || "Company"}
-            </h1>
-          </div>
-        </div>
-        <Link
-          to="/pulse"
-          className="text-sm font-medium text-blue-600 hover:text-blue-700"
-        >
-          Back to Pulse
-        </Link>
-      </div>
-
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            {Object.keys(TIMEFRAMES).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTimeframe(key)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  timeframe === key
-                    ? "bg-gray-900 text-white"
-                    : "border text-gray-600 hover:bg-gray-100"
-                }`}
-              >
-                {key}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative flex items-center gap-2">
-            <span className="text-xs font-medium text-gray-500">Exchange</span>
-            <button
-              ref={exchangeButtonRef}
-              type="button"
-              onClick={() => setExchangeOpen((prev) => !prev)}
-              className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
-            >
-              {getExchangeLogo(activeExchange) ? (
+      <div className="flex gap-6">
+        <div className="flex-1">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {stockMeta?.domain && !logoFailed ? (
                 <img
-                  src={getExchangeLogo(activeExchange)}
-                  alt={activeExchange}
-                  className="h-4 w-4"
+                  src={`https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`}
+                  alt={decodedName || "Company"}
+                  className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain"
+                  onError={() => setLogoFailed(true)}
                 />
-              ) : null}
-              <span>{activeExchange}</span>
-              <span className="text-gray-400">▾</span>
-            </button>
-            {exchangeOpen ? (
-              <div
-                ref={exchangeMenuRef}
-                className="absolute right-0 top-8 z-20 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-              >
-                {(symbolOptions.length === 0
-                  ? [{ label: activeExchange, value: resolvedSymbol || "" }]
-                  : symbolOptions
-                ).map((option) => (
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-200 text-sm font-semibold text-gray-700">
+                  {String(decodedName || "?")
+                    .trim()
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900">
+                  {decodedName || "Company"}
+                </h1>
+              </div>
+            </div>
+            <Link
+              to="/pulse"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Back to Pulse
+            </Link>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2">
+                {Object.keys(TIMEFRAMES).map((key) => (
                   <button
-                    key={option.value || option.label}
+                    key={key}
                     type="button"
-                    onClick={() => {
-                      const next = option.value;
-                      const label = option.label || "NSE";
-                      setActiveExchange(label);
-                      setResolvedSymbol(next);
-                      setExchangeOpen(false);
-                      const params = new URLSearchParams(location.search);
-                      params.set("symbol", next);
-                      navigate(`${location.pathname}?${params.toString()}`, {
-                        replace: true,
-                      });
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                    onClick={() => setTimeframe(key)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      timeframe === key
+                        ? "bg-gray-900 text-white"
+                        : "border text-gray-600 hover:bg-gray-100"
+                    }`}
                   >
-                    {getExchangeLogo(option.label) ? (
-                      <img
-                        src={getExchangeLogo(option.label)}
-                        alt={option.label}
-                        className="h-4 w-4"
-                      />
-                    ) : null}
-                    <span>{option.label}</span>
+                    {key}
                   </button>
                 ))}
               </div>
-            ) : null}
+
+              <div className="relative flex items-center gap-2">
+                <span className="text-xs font-medium text-gray-500">
+                  Exchange
+                </span>
+                <button
+                  ref={exchangeButtonRef}
+                  type="button"
+                  onClick={() => setExchangeOpen((prev) => !prev)}
+                  className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                >
+                  {getExchangeLogo(activeExchange) ? (
+                    <img
+                      src={getExchangeLogo(activeExchange)}
+                      alt={activeExchange}
+                      className="h-4 w-4"
+                    />
+                  ) : null}
+                  <span>{activeExchange}</span>
+                  <span className="text-gray-400">▾</span>
+                </button>
+                {exchangeOpen ? (
+                  <div
+                    ref={exchangeMenuRef}
+                    className="absolute right-0 top-8 z-20 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                  >
+                    {(symbolOptions.length === 0
+                      ? [{ label: activeExchange, value: resolvedSymbol || "" }]
+                      : symbolOptions
+                    ).map((option) => (
+                      <button
+                        key={option.value || option.label}
+                        type="button"
+                        onClick={() => {
+                          const next = option.value;
+                          const label = option.label || "NSE";
+                          setActiveExchange(label);
+                          setResolvedSymbol(next);
+                          setExchangeOpen(false);
+                          const params = new URLSearchParams(location.search);
+                          params.set("symbol", next);
+                          navigate(
+                            `${location.pathname}?${params.toString()}`,
+                            {
+                              replace: true,
+                            },
+                          );
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                      >
+                        {getExchangeLogo(option.label) ? (
+                          <img
+                            src={getExchangeLogo(option.label)}
+                            alt={option.label}
+                            className="h-4 w-4"
+                          />
+                        ) : null}
+                        <span>{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              {isLoading ? (
+                <div className="text-sm text-gray-500">Loading chart...</div>
+              ) : error ? (
+                <div className="text-sm text-red-500">{error}</div>
+              ) : chartData.length === 0 ? (
+                <div className="text-sm text-gray-500">
+                  {isIntradayTimeframe ? "No intraday data." : "No chart data."}
+                </div>
+              ) : (
+                <StockChart data={chartData} />
+              )}
+            </div>
           </div>
         </div>
-
-        <div className="mt-4">
-          {isLoading ? (
-            <div className="text-sm text-gray-500">Loading chart...</div>
-          ) : error ? (
-            <div className="text-sm text-red-500">{error}</div>
-          ) : chartData.length === 0 ? (
-            <div className="text-sm text-gray-500">
-              {isIntradayTimeframe ? "No intraday data." : "No chart data."}
-            </div>
-          ) : (
-            <StockChart data={chartData} />
-          )}
-        </div>
+        <OrderPanel />
       </div>
     </div>
   );
