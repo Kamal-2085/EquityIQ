@@ -31,6 +31,7 @@ const CompanyDetails = () => {
   const [activeExchange, setActiveExchange] = useState("NSE");
   const [exchangeOpen, setExchangeOpen] = useState(false);
   const [stockMeta, setStockMeta] = useState(null);
+  const [stockPrice, setStockPrice] = useState(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [chartData, setChartData] = useState([]);
   const [timeframe, setTimeframe] = useState("1M");
@@ -155,6 +156,30 @@ const CompanyDetails = () => {
   }, [resolvedSymbol]);
 
   useEffect(() => {
+    if (!resolvedSymbol) return;
+
+    let isActive = true;
+    setStockPrice(null);
+
+    fetch(`/api/market/quotes?symbols=${encodeURIComponent(resolvedSymbol)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        const quote = json?.data?.[resolvedSymbol];
+        const price = quote?.regularMarketPrice;
+        setStockPrice(typeof price === "number" ? price : null);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setStockPrice(null);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [resolvedSymbol]);
+
+  useEffect(() => {
     const handleOutsideClick = (event) => {
       if (!exchangeOpen) return;
       if (exchangeMenuRef.current?.contains(event.target)) return;
@@ -175,8 +200,8 @@ const CompanyDetails = () => {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
-      <div className="flex gap-6">
-        <div className="flex-1">
+      <div className="flex gap-6 items-stretch">
+        <div className="flex-1 flex flex-col">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               {stockMeta?.domain && !logoFailed ? (
@@ -198,17 +223,25 @@ const CompanyDetails = () => {
                 <h1 className="text-2xl font-semibold text-gray-900">
                   {decodedName || "Company"}
                 </h1>
+                <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                  <button
+                    className="rounded-full border border-gray-200 px-3 py-1 hover:bg-gray-50"
+                    type="button"
+                  >
+                    Create Alert
+                  </button>
+                  <button
+                    className="rounded-full border border-gray-200 px-3 py-1 hover:bg-gray-50"
+                    type="button"
+                  >
+                    Watchlist
+                  </button>
+                </div>
               </div>
             </div>
-            <Link
-              to="/pulse"
-              className="text-sm font-medium text-blue-600 hover:text-blue-700"
-            >
-              Back to Pulse
-            </Link>
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm flex flex-col flex-1">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 {Object.keys(TIMEFRAMES).map((key) => (
@@ -291,7 +324,7 @@ const CompanyDetails = () => {
               </div>
             </div>
 
-            <div className="mt-4">
+            <div className="mt-4 flex-1">
               {isLoading ? (
                 <div className="text-sm text-gray-500">Loading chart...</div>
               ) : error ? (
@@ -306,7 +339,26 @@ const CompanyDetails = () => {
             </div>
           </div>
         </div>
-        <OrderPanel />
+        <div className="w-full max-w-sm flex flex-col">
+          <div className="mb-3 flex justify-end">
+            <Link
+              to="/pulse"
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Back to Pulse
+            </Link>
+          </div>
+          <OrderPanel
+            companyName={decodedName || "Company"}
+            companyLogoUrl={
+              stockMeta?.domain && !logoFailed
+                ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
+                : ""
+            }
+            exchangeLabel={activeExchange}
+            marketPrice={stockPrice}
+          />
+        </div>
       </div>
     </div>
   );

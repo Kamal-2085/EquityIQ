@@ -1,35 +1,78 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaArrowRight } from "react-icons/fa";
-const OrderPanel = () => {
+const OrderPanel = ({
+  companyName,
+  companyLogoUrl,
+  exchangeLabel,
+  marketPrice,
+}) => {
   const [side, setSide] = useState("BUY");
   const [product, setProduct] = useState("DELIVERY");
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("942.45");
+  const [accountBalance, setAccountBalance] = useState(0);
+
+  useEffect(() => {
+    const loadBalance = () => {
+      const raw = localStorage.getItem("equityiq_user");
+      if (!raw) {
+        setAccountBalance(0);
+        return;
+      }
+      try {
+        const parsed = JSON.parse(raw);
+        const balance = parsed?.user?.accountBalance;
+        setAccountBalance(typeof balance === "number" ? balance : 0);
+      } catch {
+        setAccountBalance(0);
+      }
+    };
+
+    loadBalance();
+    const handleUserUpdate = () => loadBalance();
+    window.addEventListener("equityiq_user_updated", handleUserUpdate);
+    return () =>
+      window.removeEventListener("equityiq_user_updated", handleUserUpdate);
+  }, []);
+
+  const formatPrice = (value) => {
+    if (typeof value !== "number") return "--";
+    return value.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
 
   return (
-    <aside className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <aside className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col flex-1">
       <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">LIC</h2>
-          <p className="text-xs text-gray-500">NSE ₹901.85</p>
-        </div>
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <button
-            className="rounded-full border border-gray-200 px-3 py-1 hover:bg-gray-50"
-            type="button"
-          >
-            Create Alert
-          </button>
-          <button
-            className="rounded-full border border-gray-200 px-3 py-1 hover:bg-gray-50"
-            type="button"
-          >
-            Watchlist
-          </button>
+        <div className="flex items-center gap-3">
+          {companyLogoUrl ? (
+            <img
+              src={companyLogoUrl}
+              alt={companyName || "Company"}
+              className="h-9 w-9 rounded-full border border-gray-200 object-contain"
+            />
+          ) : (
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
+              {String(companyName || "?")
+                .trim()
+                .charAt(0)
+                .toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap truncate max-w-[180px]">
+              {companyName || "Company"}
+            </h2>
+            <p className="text-xs text-gray-500">
+              {exchangeLabel || "NSE"} ₹{formatPrice(marketPrice)}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="px-6 py-4">
+      <div className="px-6 py-4 flex-1">
         <div className="mb-4 flex border-b">
           {["BUY", "SELL"].map((item) => (
             <button
@@ -39,7 +82,7 @@ const OrderPanel = () => {
                 side === item
                   ? item === "BUY"
                     ? "text-green-600 border-b-2 border-green-600"
-                    : "text-red-500 border-b-2 border-red-500"
+                    : "text-blue-600 border-b-2 border-blue-600"
                   : "text-gray-400"
               }`}
             >
@@ -49,7 +92,7 @@ const OrderPanel = () => {
         </div>
 
         <div className="mb-4 flex items-center gap-2">
-          {["DELIVERY", "INTRADAY", "MTF"].map((item) => (
+          {["DELIVERY", "INTRADAY"].map((item) => (
             <button
               key={item}
               onClick={() => setProduct(item)}
@@ -62,7 +105,6 @@ const OrderPanel = () => {
               {item}
             </button>
           ))}
-          <span className="ml-auto text-xs text-gray-500">4.33x</span>
         </div>
 
         <div className="mb-3">
@@ -91,20 +133,22 @@ const OrderPanel = () => {
         </div>
 
         <div className="mb-4 flex justify-between text-xs text-gray-500">
-          <span>Balance: -₹23</span>
+          <span>Balance: ₹{accountBalance.toLocaleString("en-IN")}</span>
           {side === "BUY" && <span>Approx req: ₹0</span>}
         </div>
 
         <button
           className={`w-full rounded-md py-3 text-sm font-semibold text-white ${
-            side === "BUY" ? "bg-green-600" : "bg-red-500"
+            side === "BUY"
+              ? "bg-green-600 hover:bg-green-800"
+              : "bg-blue-500 hover:bg-blue-800"
           }`}
         >
           {side === "BUY" ? "Buy" : "Sell"}
         </button>
       </div>
 
-      <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
+      <div className="flex items-center justify-center border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
         <button
           type="button"
           className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
