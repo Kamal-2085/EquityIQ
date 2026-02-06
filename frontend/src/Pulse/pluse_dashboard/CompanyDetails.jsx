@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import StockChart from "../../components/StockChart.jsx";
+import nseLogo from "../../assets/img46.png";
+import bseLogo from "../../assets/img54.jpg";
 
 const TIMEFRAMES = {
   "1D": { range: "1d", interval: "1m" },
@@ -27,12 +29,15 @@ const CompanyDetails = () => {
   const [resolvedSymbol, setResolvedSymbol] = useState(initialSymbol);
   const [symbolOptions, setSymbolOptions] = useState([]);
   const [activeExchange, setActiveExchange] = useState("NSE");
+  const [exchangeOpen, setExchangeOpen] = useState(false);
   const [stockMeta, setStockMeta] = useState(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [chartData, setChartData] = useState([]);
   const [timeframe, setTimeframe] = useState("1M");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const exchangeMenuRef = useRef(null);
+  const exchangeButtonRef = useRef(null);
 
   useEffect(() => {
     setResolvedSymbol(initialSymbol);
@@ -149,7 +154,24 @@ const CompanyDetails = () => {
     };
   }, [resolvedSymbol]);
 
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!exchangeOpen) return;
+      if (exchangeMenuRef.current?.contains(event.target)) return;
+      if (exchangeButtonRef.current?.contains(event.target)) return;
+      setExchangeOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [exchangeOpen]);
+
   const isIntradayTimeframe = timeframe === "1D" || timeframe === "1W";
+  const getExchangeLogo = (label) => {
+    const key = String(label || "").toUpperCase();
+    if (key === "NSE") return nseLogo;
+    if (key === "BSE") return bseLogo;
+    return null;
+  };
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
@@ -203,35 +225,62 @@ const CompanyDetails = () => {
             ))}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
             <span className="text-xs font-medium text-gray-500">Exchange</span>
-            <select
-              value={resolvedSymbol}
-              onChange={(event) => {
-                const next = event.target.value;
-                const label = symbolOptions.find(
-                  (option) => option.value === next,
-                )?.label;
-                setActiveExchange(label || "NSE");
-                setResolvedSymbol(next);
-                const params = new URLSearchParams(location.search);
-                params.set("symbol", next);
-                navigate(`${location.pathname}?${params.toString()}`, {
-                  replace: true,
-                });
-              }}
-              className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+            <button
+              ref={exchangeButtonRef}
+              type="button"
+              onClick={() => setExchangeOpen((prev) => !prev)}
+              className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
             >
-              {symbolOptions.length === 0 ? (
-                <option value={resolvedSymbol || ""}>{activeExchange}</option>
-              ) : (
-                symbolOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))
-              )}
-            </select>
+              {getExchangeLogo(activeExchange) ? (
+                <img
+                  src={getExchangeLogo(activeExchange)}
+                  alt={activeExchange}
+                  className="h-4 w-4"
+                />
+              ) : null}
+              <span>{activeExchange}</span>
+              <span className="text-gray-400">▾</span>
+            </button>
+            {exchangeOpen ? (
+              <div
+                ref={exchangeMenuRef}
+                className="absolute right-0 top-8 z-20 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+              >
+                {(symbolOptions.length === 0
+                  ? [{ label: activeExchange, value: resolvedSymbol || "" }]
+                  : symbolOptions
+                ).map((option) => (
+                  <button
+                    key={option.value || option.label}
+                    type="button"
+                    onClick={() => {
+                      const next = option.value;
+                      const label = option.label || "NSE";
+                      setActiveExchange(label);
+                      setResolvedSymbol(next);
+                      setExchangeOpen(false);
+                      const params = new URLSearchParams(location.search);
+                      params.set("symbol", next);
+                      navigate(`${location.pathname}?${params.toString()}`, {
+                        replace: true,
+                      });
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                  >
+                    {getExchangeLogo(option.label) ? (
+                      <img
+                        src={getExchangeLogo(option.label)}
+                        alt={option.label}
+                        className="h-4 w-4"
+                      />
+                    ) : null}
+                    <span>{option.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
 
