@@ -4,6 +4,9 @@ import StockChart from "../../components/StockChart.jsx";
 import nseLogo from "../../assets/img46.png";
 import bseLogo from "../../assets/img54.jpg";
 import OrderPanel from "./OrderPanel.jsx";
+import AlertPanel from "./AlertPanel.jsx";
+import { IoMdAlarm } from "react-icons/io";
+import { FaCartPlus } from "react-icons/fa";
 const TIMEFRAMES = {
   "1D": { range: "1d", interval: "1m" },
   "1W": { range: "5d", interval: "5m" },
@@ -37,6 +40,7 @@ const CompanyDetails = () => {
   const [timeframe, setTimeframe] = useState("1M");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showAlertPanel, setShowAlertPanel] = useState(false);
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
 
@@ -225,15 +229,18 @@ const CompanyDetails = () => {
                 </h1>
                 <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                   <button
-                    className="rounded-full border border-gray-200 px-3 py-1 hover:bg-gray-50"
+                    className="rounded-full border border-gray-200 px-3 py-1 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-between gap-1"
                     type="button"
+                    onClick={() => setShowAlertPanel(true)}
                   >
+                    <IoMdAlarm className="h-4 w-4 text-gray-600" />
                     Create Alert
                   </button>
                   <button
-                    className="rounded-full border border-gray-200 px-3 py-1 hover:bg-gray-50"
+                    className="rounded-full border border-gray-200 px-3 py-1 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-between gap-1"
                     type="button"
                   >
+                    <FaCartPlus className="h-4 w-4 text-gray-600" />
                     Watchlist
                   </button>
                 </div>
@@ -348,16 +355,20 @@ const CompanyDetails = () => {
               Back to Pulse
             </Link>
           </div>
-          <OrderPanel
-            companyName={decodedName || "Company"}
-            companyLogoUrl={
-              stockMeta?.domain && !logoFailed
-                ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
-                : ""
-            }
-            exchangeLabel={activeExchange}
-            marketPrice={stockPrice}
-          />
+          {showAlertPanel ? (
+            <AlertPanel onClose={() => setShowAlertPanel(false)} />
+          ) : (
+            <OrderPanel
+              companyName={decodedName || "Company"}
+              companyLogoUrl={
+                stockMeta?.domain && !logoFailed
+                  ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
+                  : ""
+              }
+              exchangeLabel={activeExchange}
+              marketPrice={stockPrice}
+            />
+          )}
         </div>
       </div>
     </div>

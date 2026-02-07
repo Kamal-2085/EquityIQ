@@ -108,7 +108,7 @@ const OrderPanel = ({
         </div>
 
         <div className="mb-3">
-          <label className="text-xs text-gray-500">Qty (BSE)</label>
+          <label className="text-xs text-gray-500">Qty </label>
           <input
             type="number"
             value={qty}
