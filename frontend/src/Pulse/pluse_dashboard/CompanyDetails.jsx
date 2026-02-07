@@ -5,6 +5,8 @@ import nseLogo from "../../assets/img46.png";
 import bseLogo from "../../assets/img54.jpg";
 import OrderPanel from "./OrderPanel.jsx";
 import AlertPanel from "./AlertPanel.jsx";
+import { useWatchlist } from "./Watchlist.jsx";
+import toast from "react-hot-toast";
 import { IoMdAlarm } from "react-icons/io";
 import { FaCartPlus } from "react-icons/fa";
 const TIMEFRAMES = {
@@ -41,6 +43,7 @@ const CompanyDetails = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAlertPanel, setShowAlertPanel] = useState(false);
+  const { watchlist, setWatchlist } = useWatchlist();
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
 
@@ -202,6 +205,32 @@ const CompanyDetails = () => {
     return null;
   };
 
+  const getStockKey = (stock) =>
+    stock?.nse || stock?.bse || stock?.symbol || stock?.name;
+
+  const handleAddToWatchlist = () => {
+    if (!resolvedSymbol && !decodedName) return;
+    const symbol = String(resolvedSymbol || "");
+    const upper = symbol.toUpperCase();
+    const entry = {
+      name: decodedName || "Company",
+      nse: upper.endsWith(".NS") ? symbol : undefined,
+      bse: upper.endsWith(".BO") ? symbol : undefined,
+      exchange: activeExchange,
+    };
+    if (!entry.nse && !entry.bse && symbol) {
+      entry.nse = symbol;
+    }
+
+    const key = getStockKey(entry);
+    if (watchlist.some((item) => getStockKey(item) === key)) {
+      toast.success("Stock added to watchlist");
+      return;
+    }
+    setWatchlist((prev) => [...prev, entry]);
+    toast.success("Stock added to watchlist");
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
       <div className="flex gap-6 items-stretch">
@@ -239,6 +268,7 @@ const CompanyDetails = () => {
                   <button
                     className="rounded-full border border-gray-200 px-3 py-1 bg-gray-50 hover:bg-gray-100 cursor-pointer flex items-center justify-between gap-1"
                     type="button"
+                    onClick={handleAddToWatchlist}
                   >
                     <FaCartPlus className="h-4 w-4 text-gray-600" />
                     Watchlist

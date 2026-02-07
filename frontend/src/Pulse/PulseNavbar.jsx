@@ -115,10 +115,43 @@ const PulseNavbar = () => {
 
   const { setAccessToken } = useAuth();
   const handleLogout = async () => {
+    const rawUser = localStorage.getItem("equityiq_user");
+    let userKey = "guest";
+    if (rawUser) {
+      try {
+        const parsed = JSON.parse(rawUser);
+        const storedUser = parsed?.user;
+        userKey = storedUser?.id || storedUser?.email || "guest";
+      } catch {}
+    }
+    const watchlistKey = `equityiq_watchlist_${userKey}`;
+    const cachedWatchlist = (() => {
+      const raw = localStorage.getItem(watchlistKey);
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })();
+
+    if (cachedWatchlist.length > 0) {
+      const token = localStorage.getItem("equityiq_access_token");
+      if (token) {
+        api.defaults.headers.Authorization = `Bearer ${token}`;
+      }
+      try {
+        await api.post("/auth/watchlist", { watchlist: cachedWatchlist });
+      } catch {}
+    }
+
     try {
       await api.post("/auth/logout");
     } catch (e) {}
     localStorage.removeItem("equityiq_user");
+    localStorage.removeItem("equityiq_access_token");
+    localStorage.removeItem(watchlistKey);
     sessionStorage.removeItem("market-toast-shown");
     window.dispatchEvent(new Event("equityiq_user_updated"));
     setAccessToken(null);

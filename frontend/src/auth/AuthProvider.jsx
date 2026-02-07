@@ -7,7 +7,14 @@ import {
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [accessToken, setAccessToken] = useState(null);
+  const [accessToken, setAccessToken] = useState(() => {
+    const stored = localStorage.getItem("equityiq_access_token");
+    if (stored) {
+      setApiAccessToken(stored);
+      return stored;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,13 +31,20 @@ export const AuthProvider = ({ children }) => {
           const data = await res.json();
           setAccessToken(data.accessToken);
           setApiAccessToken(data.accessToken);
+          if (data.accessToken) {
+            localStorage.setItem("equityiq_access_token", data.accessToken);
+          }
         } else {
+          if (!accessToken) {
+            setAccessToken(null);
+            clearApiAccessToken();
+          }
+        }
+      } catch (err) {
+        if (!accessToken) {
           setAccessToken(null);
           clearApiAccessToken();
         }
-      } catch (err) {
-        setAccessToken(null);
-        clearApiAccessToken();
       } finally {
         if (mounted) setLoading(false);
       }

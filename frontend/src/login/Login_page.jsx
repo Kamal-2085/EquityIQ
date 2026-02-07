@@ -28,6 +28,7 @@ const Login_page = () => {
       if (res.data?.accessToken) {
         setAccessToken(res.data.accessToken);
         setApiAccessToken(res.data.accessToken);
+        localStorage.setItem("equityiq_access_token", res.data.accessToken);
       }
 
       if (res.data?.user) {
@@ -36,6 +37,19 @@ const Login_page = () => {
         localStorage.setItem("equityiq_user", JSON.stringify(payload));
         sessionStorage.removeItem("market-toast-shown");
         window.dispatchEvent(new Event("equityiq_user_updated"));
+
+        const userKey = res.data.user?.id || res.data.user?.email || "guest";
+        try {
+          const watchRes = await api.get("/auth/watchlist");
+          const list = Array.isArray(watchRes.data?.watchlist)
+            ? watchRes.data.watchlist
+            : [];
+          localStorage.setItem(
+            `equityiq_watchlist_${userKey}`,
+            JSON.stringify(list),
+          );
+          window.dispatchEvent(new Event("equityiq_watchlist_updated"));
+        } catch {}
       }
 
       toast.success("Logged in successfully");
