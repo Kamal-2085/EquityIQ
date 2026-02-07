@@ -6,6 +6,24 @@ const router = express.Router();
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
 });
+const newsCache = new Map();
+const NEWS_CACHE_TTL = 5 * 60 * 1000;
+const profileCache = new Map();
+const priceCache = new Map();
+const fundamentalsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
+
+const getCachedValue = (cache, symbol, ttl) => {
+  const cached = cache.get(symbol);
+  if (!cached) return null;
+  if (Date.now() - cached.time > ttl) {
+    cache.delete(symbol);
+    return null;
+  }
+  return cached.data;
+};
+const getCachedNews = (symbol) =>
+  getCachedValue(newsCache, symbol, NEWS_CACHE_TTL);
 router.get("/chart/:symbol", async (req, res) => {
   try {
     const symbol = req.params.symbol;
@@ -264,6 +282,194 @@ router.get("/quotes", async (req, res) => {
   } catch (error) {
     console.error("Yahoo Finance quote failed:", error?.message || error);
     return res.status(500).json({ message: "Failed to fetch quotes" });
+  }
+});
+
+router.get("/profile/:symbol", async (req, res) => {
+  try {
+    const rawSymbol = String(req.params.symbol || "").trim();
+    if (!rawSymbol) {
+      return res.status(400).json({ message: "symbol is required" });
+    }
+
+    const symbol = rawSymbol.toUpperCase();
+    const cached = getCachedValue(profileCache, symbol, CACHE_TTL);
+    if (cached) return res.json(cached);
+
+    const data = await yahooFinance.quoteSummary(symbol, {
+      modules: ["summaryProfile"],
+    });
+
+    const profile = data?.summaryProfile || {};
+    const payload = {
+      symbol,
+      profile: {
+        sector: profile?.sector || null,
+        industry: profile?.industry || null,
+        fullTimeEmployees: profile?.fullTimeEmployees || null,
+        longBusinessSummary: profile?.longBusinessSummary || null,
+        website: profile?.website || null,
+      },
+      source: "Yahoo Finance",
+      disclaimer: "Company data is for informational purposes only.",
+    };
+
+    profileCache.set(symbol, { time: Date.now(), data: payload });
+    return res.json(payload);
+  } catch (error) {
+    console.error(
+      "Yahoo Finance profile fetch failed:",
+      error?.message || error,
+    );
+    return res.status(500).json({ message: "Failed to fetch company profile" });
+  }
+});
+
+router.get("/price/:symbol", async (req, res) => {
+  try {
+    const rawSymbol = String(req.params.symbol || "").trim();
+    if (!rawSymbol) {
+      return res.status(400).json({ message: "symbol is required" });
+    }
+
+    const symbol = rawSymbol.toUpperCase();
+    const cached = getCachedValue(priceCache, symbol, CACHE_TTL);
+    if (cached) return res.json(cached);
+
+    const data = await yahooFinance.quoteSummary(symbol, {
+      modules: ["price"],
+    });
+
+    const price = data?.price || {};
+    const payload = {
+      symbol,
+      price: {
+        open: price?.regularMarketOpen ?? null,
+        previousClose: price?.regularMarketPreviousClose ?? null,
+        dayHigh: price?.regularMarketDayHigh ?? null,
+        dayLow: price?.regularMarketDayLow ?? null,
+        fiftyTwoWeekHigh: price?.fiftyTwoWeekHigh ?? null,
+        fiftyTwoWeekLow: price?.fiftyTwoWeekLow ?? null,
+        marketState: price?.marketState ?? null,
+        currency: price?.currency ?? null,
+      },
+      source: "Yahoo Finance",
+      disclaimer: "Market data may be delayed.",
+    };
+
+    priceCache.set(symbol, { time: Date.now(), data: payload });
+    return res.json(payload);
+  } catch (error) {
+    console.error("Yahoo Finance price fetch failed:", error?.message || error);
+    return res.status(500).json({ message: "Failed to fetch price data" });
+  }
+});
+
+router.get("/fundamentals/:symbol", async (req, res) => {
+  try {
+    const rawSymbol = String(req.params.symbol || "").trim();
+    if (!rawSymbol) {
+      return res.status(400).json({ message: "symbol is required" });
+    }
+
+    const symbol = rawSymbol.toUpperCase();
+    const cached = getCachedValue(fundamentalsCache, symbol, CACHE_TTL);
+    if (cached) return res.json(cached);
+
+    const data = await yahooFinance.quoteSummary(symbol, {
+      modules: ["summaryDetail", "defaultKeyStatistics"],
+    });
+
+    const detail = data?.summaryDetail || {};
+    const stats = data?.defaultKeyStatistics || {};
+    const payload = {
+      symbol,
+      fundamentals: {
+        marketCap: detail?.marketCap ?? null,
+        trailingPE: detail?.trailingPE ?? null,
+        trailingEps: stats?.trailingEps ?? null,
+        bookValue: stats?.bookValue ?? null,
+        dividendYield: detail?.dividendYield ?? null,
+        beta: detail?.beta ?? null,
+      },
+      source: "Yahoo Finance",
+      disclaimer: "Fundamentals are provided for informational purposes only.",
+    };
+
+    fundamentalsCache.set(symbol, { time: Date.now(), data: payload });
+    return res.json(payload);
+  } catch (error) {
+    console.error(
+      "Yahoo Finance fundamentals fetch failed:",
+      error?.message || error,
+    );
+    return res.status(500).json({ message: "Failed to fetch fundamentals" });
+  }
+});
+
+// GET latest news for a stock
+router.get("/news/:symbol", async (req, res) => {
+  try {
+    const rawSymbol = String(req.params.symbol || "").trim();
+    if (!rawSymbol) {
+      return res.status(400).json({ message: "symbol is required" });
+    }
+
+    const symbol = rawSymbol.toUpperCase();
+    const cached = getCachedNews(symbol);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const data = await yahooFinance.quoteSummary(symbol, {
+      modules: ["news"],
+    });
+
+    const news = Array.isArray(data?.news) ? data.news : [];
+    let formattedNews = news.map((item) => ({
+      title: item?.title || "",
+      link: item?.link || "",
+      publisher: item?.publisher || "",
+      publishedAt: item?.providerPublishTime || null,
+      image: item?.thumbnail?.resolutions?.[0]?.url || null,
+      relatedTickers: item?.relatedTickers || [],
+    }));
+
+    if (formattedNews.length === 0) {
+      try {
+        const search = await yahooFinance.search(symbol, {
+          quotesCount: 0,
+          newsCount: 6,
+          enableFuzzyQuery: true,
+        });
+        const searchNews = Array.isArray(search?.news) ? search.news : [];
+        formattedNews = searchNews.map((item) => ({
+          title: item?.title || "",
+          link: item?.link || "",
+          publisher: item?.publisher || "",
+          publishedAt: item?.providerPublishTime || null,
+          image: item?.thumbnail?.resolutions?.[0]?.url || null,
+          relatedTickers: item?.relatedTickers || [],
+        }));
+      } catch (searchError) {
+        formattedNews = [];
+      }
+    }
+
+    const payload = {
+      symbol,
+      results: formattedNews,
+      source: "Yahoo Finance",
+      disclaimer:
+        "News is provided for informational purposes only. EquityIQ does not verify third-party content.",
+    };
+
+    newsCache.set(symbol, { time: Date.now(), data: payload });
+
+    return res.json(payload);
+  } catch (error) {
+    console.error("Yahoo Finance news fetch failed:", error?.message || error);
+    return res.status(500).json({ message: "Failed to fetch news" });
   }
 });
 

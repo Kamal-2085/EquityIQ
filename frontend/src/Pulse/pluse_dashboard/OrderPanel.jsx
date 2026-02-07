@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { FaArrowRight } from "react-icons/fa";
 const OrderPanel = ({
   companyName,
   companyLogoUrl,
@@ -151,10 +150,9 @@ const OrderPanel = ({
       <div className="flex items-center justify-center border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-700 cursor-pointer"
         >
           Analyze With EquityAI
-          <FaArrowRight className="h-3 w-3" />
         </button>
       </div>
     </aside>

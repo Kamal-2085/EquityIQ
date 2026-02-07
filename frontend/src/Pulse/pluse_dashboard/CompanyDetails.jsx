@@ -43,6 +43,10 @@ const CompanyDetails = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAlertPanel, setShowAlertPanel] = useState(false);
+  const [companyProfile, setCompanyProfile] = useState({});
+  const [priceData, setPriceData] = useState({});
+  const [fundamentals, setFundamentals] = useState({});
+  const [news, setNews] = useState([]);
   const { watchlist, setWatchlist } = useWatchlist();
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
@@ -155,6 +159,59 @@ const CompanyDetails = () => {
       .catch(() => {
         if (!isActive) return;
         setStockMeta(null);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [resolvedSymbol]);
+
+  useEffect(() => {
+    if (!resolvedSymbol) return;
+    let isActive = true;
+
+    fetch(`/api/market/profile/${encodeURIComponent(resolvedSymbol)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        setCompanyProfile(json?.profile || {});
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setCompanyProfile({});
+      });
+
+    fetch(`/api/market/price/${encodeURIComponent(resolvedSymbol)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        setPriceData(json?.price || {});
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setPriceData({});
+      });
+
+    fetch(`/api/market/fundamentals/${encodeURIComponent(resolvedSymbol)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        setFundamentals(json?.fundamentals || {});
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setFundamentals({});
+      });
+
+    fetch(`/api/market/news/${encodeURIComponent(resolvedSymbol)}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        setNews(Array.isArray(json?.results) ? json.results : []);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setNews([]);
       });
 
     return () => {
@@ -400,6 +457,120 @@ const CompanyDetails = () => {
             />
           )}
         </div>
+      </div>
+      <div className="mx-auto max-w-6xl px-6 pb-16 space-y-12 mt-10">
+        <section>
+          <h1 className="mb-4 text-xl font-semibold text-gray-900">
+            Company Profile
+          </h1>
+
+          <div className="rounded-xl border bg-white p-6 text-sm text-gray-700 space-y-3">
+            <p>
+              <span className="font-medium">Sector:</span>{" "}
+              {companyProfile?.sector || "—"}
+            </p>
+            <p>
+              <span className="font-medium">Industry:</span>{" "}
+              {companyProfile?.industry || "—"}
+            </p>
+            <p>
+              <span className="font-medium">Employees:</span>{" "}
+              {companyProfile?.fullTimeEmployees
+                ? companyProfile.fullTimeEmployees.toLocaleString("en-IN")
+                : "—"}
+            </p>
+            <p className="pt-2 leading-relaxed text-gray-600">
+              {companyProfile?.longBusinessSummary || ""}
+            </p>
+
+            {companyProfile?.website && (
+              <a
+                href={companyProfile.website}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block pt-2 text-blue-600 hover:underline"
+              >
+                Visit company website →
+              </a>
+            )}
+          </div>
+        </section>
+        <section>
+          <h1 className="mb-4 text-xl font-semibold text-gray-900">
+            Price & Market Data
+          </h1>
+
+          <div className="grid grid-cols-2 gap-4 rounded-xl border bg-white p-6 text-sm">
+            <div>Open: ₹{priceData?.open ?? "—"}</div>
+            <div>Prev Close: ₹{priceData?.previousClose ?? "—"}</div>
+            <div>Day High: ₹{priceData?.dayHigh ?? "—"}</div>
+            <div>Day Low: ₹{priceData?.dayLow ?? "—"}</div>
+            <div>52W High: ₹{priceData?.fiftyTwoWeekHigh ?? "—"}</div>
+            <div>52W Low: ₹{priceData?.fiftyTwoWeekLow ?? "—"}</div>
+            <div>
+              Market Status:{" "}
+              <span
+                className={`font-medium ${
+                  priceData?.marketState === "REGULAR"
+                    ? "text-green-600"
+                    : "text-gray-500"
+                }`}
+              >
+                {priceData?.marketState === "REGULAR" ? "Open" : "Closed"}
+              </span>
+            </div>
+            <div>Currency: {priceData?.currency || "—"}</div>
+          </div>
+        </section>
+        <section>
+          <h1 className="mb-4 text-xl font-semibold text-gray-900">
+            Valuation Metrics
+          </h1>
+
+          <div className="grid grid-cols-2 gap-4 rounded-xl border bg-white p-6 text-sm">
+            <div>
+              Market Cap: ₹{fundamentals?.marketCap?.toLocaleString("en-IN")}
+            </div>
+            <div>PE Ratio (TTM): {fundamentals?.trailingPE ?? "—"}</div>
+            <div>EPS (TTM): {fundamentals?.trailingEps ?? "—"}</div>
+            <div>Book Value: {fundamentals?.bookValue ?? "—"}</div>
+            <div>Dividend Yield: {fundamentals?.dividendYield ?? "—"}</div>
+            <div>Beta: {fundamentals?.beta ?? "—"}</div>
+          </div>
+        </section>
+        <section>
+          <h1 className="mb-4 text-xl font-semibold text-gray-900">
+            Latest News
+          </h1>
+
+          <div className="space-y-4">
+            {news.length === 0 && (
+              <p className="text-sm text-gray-500">No recent news available.</p>
+            )}
+
+            {news.map((item, idx) => (
+              <a
+                key={idx}
+                href={item.link}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-xl border bg-white p-4 hover:bg-gray-50 transition"
+              >
+                <p className="font-medium text-gray-900">{item.title}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {item.publisher} •{" "}
+                  {item.publishedAt
+                    ? new Date(item.publishedAt * 1000).toLocaleString()
+                    : ""}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+        <p className="pt-8 text-xs text-gray-400">
+          Data sourced from Yahoo Finance. Market data may be delayed. EquityIQ
+          provides paper trading & analysis only. No real trades executed.
+        </p>
       </div>
     </div>
   );
