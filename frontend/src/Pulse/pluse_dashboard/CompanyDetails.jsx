@@ -567,10 +567,6 @@ const CompanyDetails = () => {
             ))}
           </div>
         </section>
-        <p className="pt-8 text-xs text-gray-400">
-          Data sourced from Yahoo Finance. Market data may be delayed. EquityIQ
-          provides paper trading & analysis only. No real trades executed.
-        </p>
       </div>
     </div>
   );
