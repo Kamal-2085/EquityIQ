@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { AreaSeries, createChart } from "lightweight-charts";
 
-const StockChart = ({ data }) => {
+const StockChart = ({ data, height = 320, minHeight = 320 }) => {
   const containerRef = useRef();
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
@@ -10,7 +10,7 @@ const StockChart = ({ data }) => {
     if (!containerRef.current) return undefined;
 
     const chart = createChart(containerRef.current, {
-      height: 320,
+      height,
       width: containerRef.current.clientWidth || 600,
       layout: {
         background: { color: "#ffffff" },
@@ -58,7 +58,7 @@ const StockChart = ({ data }) => {
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, []);
+  }, [height]);
 
   useEffect(() => {
     if (!seriesRef.current) return;
@@ -84,9 +84,7 @@ const StockChart = ({ data }) => {
     chartRef.current?.timeScale().fitContent();
   }, [data]);
 
-  return (
-    <div ref={containerRef} className="w-full" style={{ minHeight: 320 }} />
-  );
+  return <div ref={containerRef} className="w-full" style={{ minHeight }} />;
 };
 
 export default StockChart;

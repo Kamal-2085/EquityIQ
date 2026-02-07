@@ -3,9 +3,21 @@ import { FaRegBell } from "react-icons/fa";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import ProfileMenu from "../components/ProfileMenu.jsx";
+import StockChart from "../components/StockChart.jsx";
 import img8 from "../assets/img8.png";
 import api from "../auth/apiClient";
 import { useAuth } from "../auth/AuthProvider";
+
+const INDEX_TIMEFRAMES = {
+  "1D": { range: "1d", interval: "1m" },
+  "1W": { range: "5d", interval: "5m" },
+  "1M": { range: "1mo", interval: "30m" },
+  "3M": { range: "3mo", interval: "1d" },
+  "6M": { range: "6mo", interval: "1d" },
+  "1Y": { range: "1y", interval: "1d" },
+  "5Y": { range: "5y", interval: "1wk" },
+  ALL: { range: "max", interval: "1mo" },
+};
 const PulseNavbar = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -16,9 +28,18 @@ const PulseNavbar = () => {
     sensex: null,
     disclaimer: null,
   });
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [indexCharts, setIndexCharts] = useState({});
+  const [indexChartLoading, setIndexChartLoading] = useState({});
+  const [indexTimeframe, setIndexTimeframe] = useState({
+    nifty: "1D",
+    sensex: "1D",
+  });
   const profileMenuRef = useRef(null);
   const profileButtonRef = useRef(null);
   const fileInputRef = useRef(null);
+  const niftyRef = useRef(null);
+  const sensexRef = useRef(null);
 
   useEffect(() => {
     const loadUser = () => {
@@ -85,6 +106,17 @@ const PulseNavbar = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [profileOpen]);
 
+  useEffect(() => {
+    const handleIndexOutside = (event) => {
+      if (!hoveredIndex) return;
+      if (niftyRef.current?.contains(event.target)) return;
+      if (sensexRef.current?.contains(event.target)) return;
+      setHoveredIndex(null);
+    };
+    document.addEventListener("mousedown", handleIndexOutside);
+    return () => document.removeEventListener("mousedown", handleIndexOutside);
+  }, [hoveredIndex]);
+
   const getInitial = (name) => {
     if (!name) return "?";
     const firstChar = name.trim().charAt(0);
@@ -112,6 +144,29 @@ const PulseNavbar = () => {
   const sensexChange = sensex?.change ?? null;
   const changeClass = (value) =>
     value !== null && value >= 0 ? "text-green-600" : "text-red-500";
+
+  const getIndexKey = (key, timeframe) => `${key}_${timeframe}`;
+
+  const loadIndexChart = async (key, symbol, timeframe) => {
+    const frame = INDEX_TIMEFRAMES[timeframe] || INDEX_TIMEFRAMES["1D"];
+    const cacheKey = getIndexKey(key, timeframe);
+    if (indexCharts[cacheKey] || indexChartLoading[cacheKey]) return;
+    setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: true }));
+    try {
+      const res = await api.get(
+        `/market/chart/${encodeURIComponent(symbol)}?range=${
+          frame.range
+        }&interval=${frame.interval}`,
+      );
+      const data = Array.isArray(res.data?.data) ? res.data.data : [];
+      setIndexCharts((prev) => ({ ...prev, [cacheKey]: data }));
+    } catch (error) {
+      console.error("Failed to load index chart", error);
+      setIndexCharts((prev) => ({ ...prev, [cacheKey]: [] }));
+    } finally {
+      setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: false }));
+    }
+  };
 
   const { setAccessToken } = useAuth();
   const handleLogout = async () => {
@@ -226,7 +281,16 @@ const PulseNavbar = () => {
       <div className="max-w-360 mx-auto px-4">
         <div className="flex h-12 items-center justify-between">
           <div className="flex items-center gap-6 text-[11px] text-gray-500 whitespace-nowrap">
-            <div className="flex items-center gap-1">
+            <div
+              ref={niftyRef}
+              className="relative flex items-center gap-1 cursor-pointer"
+              onClick={() => {
+                const next = hoveredIndex === "nifty" ? null : "nifty";
+                setHoveredIndex(next);
+                if (next)
+                  loadIndexChart("nifty", "^NSEI", indexTimeframe.nifty);
+              }}
+            >
               <span className="font-medium text-gray-600">NIFTY 50</span>
               <span className={`font-semibold ${changeClass(niftyChange)}`}>
                 {formatNumber(nifty?.price)}
@@ -238,8 +302,69 @@ const PulseNavbar = () => {
                     )} (${formatChangePercent(nifty?.changePercent)})`
                   : "--"}
               </span>
+              {hoveredIndex === "nifty" && (
+                <div
+                  className="absolute left-0 top-full z-30 mt-2 w-80 rounded-xl border border-gray-200 bg-white p-3 shadow-lg"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mb-2 text-[11px] text-gray-500">
+                    NIFTY 50 · {indexTimeframe.nifty}
+                  </div>
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {Object.keys(INDEX_TIMEFRAMES).map((frame) => (
+                      <button
+                        key={frame}
+                        type="button"
+                        onClick={() => {
+                          setIndexTimeframe((prev) => ({
+                            ...prev,
+                            nifty: frame,
+                          }));
+                          loadIndexChart("nifty", "^NSEI", frame);
+                        }}
+                        className={`rounded-full px-2 py-0.5 text-[10px] ${
+                          indexTimeframe.nifty === frame
+                            ? "bg-gray-900 text-white"
+                            : "border border-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {frame}
+                      </button>
+                    ))}
+                  </div>
+                  {indexChartLoading[
+                    getIndexKey("nifty", indexTimeframe.nifty)
+                  ] &&
+                  (!indexCharts[getIndexKey("nifty", indexTimeframe.nifty)] ||
+                    indexCharts[getIndexKey("nifty", indexTimeframe.nifty)]
+                      .length === 0) ? (
+                    <div className="text-xs text-gray-400">
+                      Loading chart...
+                    </div>
+                  ) : (
+                    <StockChart
+                      data={
+                        indexCharts[
+                          getIndexKey("nifty", indexTimeframe.nifty)
+                        ] || []
+                      }
+                      height={140}
+                      minHeight={140}
+                    />
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-1">
+            <div
+              ref={sensexRef}
+              className="relative flex items-center gap-1 cursor-pointer"
+              onClick={() => {
+                const next = hoveredIndex === "sensex" ? null : "sensex";
+                setHoveredIndex(next);
+                if (next)
+                  loadIndexChart("sensex", "^BSESN", indexTimeframe.sensex);
+              }}
+            >
               <span className="font-medium text-gray-600">SENSEX</span>
               <span className={`font-semibold ${changeClass(sensexChange)}`}>
                 {formatNumber(sensex?.price)}
@@ -251,6 +376,58 @@ const PulseNavbar = () => {
                     )} (${formatChangePercent(sensex?.changePercent)})`
                   : "--"}
               </span>
+              {hoveredIndex === "sensex" && (
+                <div
+                  className="absolute left-0 top-full z-30 mt-2 w-80 rounded-xl border border-gray-200 bg-white p-3 shadow-lg"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="mb-2 text-[11px] text-gray-500">
+                    SENSEX · {indexTimeframe.sensex}
+                  </div>
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {Object.keys(INDEX_TIMEFRAMES).map((frame) => (
+                      <button
+                        key={frame}
+                        type="button"
+                        onClick={() => {
+                          setIndexTimeframe((prev) => ({
+                            ...prev,
+                            sensex: frame,
+                          }));
+                          loadIndexChart("sensex", "^BSESN", frame);
+                        }}
+                        className={`rounded-full px-2 py-0.5 text-[10px] ${
+                          indexTimeframe.sensex === frame
+                            ? "bg-gray-900 text-white"
+                            : "border border-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {frame}
+                      </button>
+                    ))}
+                  </div>
+                  {indexChartLoading[
+                    getIndexKey("sensex", indexTimeframe.sensex)
+                  ] &&
+                  (!indexCharts[getIndexKey("sensex", indexTimeframe.sensex)] ||
+                    indexCharts[getIndexKey("sensex", indexTimeframe.sensex)]
+                      .length === 0) ? (
+                    <div className="text-xs text-gray-400">
+                      Loading chart...
+                    </div>
+                  ) : (
+                    <StockChart
+                      data={
+                        indexCharts[
+                          getIndexKey("sensex", indexTimeframe.sensex)
+                        ] || []
+                      }
+                      height={140}
+                      minHeight={140}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
