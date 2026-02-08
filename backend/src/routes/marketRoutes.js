@@ -20,6 +20,34 @@ const getCachedValue = (cache, symbol, ttl) => {
   }
   return cached.data;
 };
+
+const extractDomain = (website) => {
+  if (!website) return null;
+  try {
+    const url = website.startsWith("http") ? website : `https://${website}`;
+    const hostname = new URL(url).hostname.replace(/^www\./i, "");
+    return hostname || null;
+  } catch {
+    return null;
+  }
+};
+
+const fetchDomainFromYahoo = async (symbols) => {
+  for (const candidate of symbols) {
+    if (!candidate) continue;
+    try {
+      const data = await yahooFinance.quoteSummary(candidate, {
+        modules: ["summaryProfile"],
+      });
+      const website = data?.summaryProfile?.website || null;
+      const domain = extractDomain(website);
+      if (domain) return domain;
+    } catch {
+      // try next candidate
+    }
+  }
+  return null;
+};
 router.get("/chart/:symbol", async (req, res) => {
   try {
     const symbol = req.params.symbol;
@@ -436,20 +464,60 @@ router.get("/stocks/:symbol", async (req, res) => {
       return res.status(400).json({ message: "symbol is required" });
     }
     const baseSymbol = rawSymbol.replace(/\.NS$|\.BO$/i, "").toUpperCase();
-    const stock = await Stock.findOne({
+    let stock = await Stock.findOne({
       symbol: baseSymbol,
       isActive: true,
     }).select("symbol name exchange domain isNifty50");
 
     if (!stock) {
-      return res.status(404).json({ message: "Stock not found" });
+      const domain = await fetchDomainFromYahoo([
+        rawSymbol,
+        `${baseSymbol}.NS`,
+        `${baseSymbol}.BO`,
+      ]);
+      let name = baseSymbol;
+      let exchange = [];
+
+      try {
+        const quote = await yahooFinance.quote(rawSymbol);
+        name = quote?.longName || quote?.shortName || name;
+        if (quote?.fullExchangeName) {
+          exchange = [quote.fullExchangeName];
+        }
+      } catch {
+        // ignore quote lookup failures
+      }
+
+      const upper = rawSymbol.toUpperCase();
+      if (upper.endsWith(".NS")) exchange = ["NSE"];
+      if (upper.endsWith(".BO")) exchange = ["BSE"];
+      if (exchange.length === 0) exchange = ["NSE", "BSE"];
+
+      stock = await Stock.create({
+        symbol: baseSymbol,
+        name,
+        exchange,
+        domain,
+        isNifty50: false,
+        isActive: true,
+      });
+    }
+
+    let domain = stock.domain || null;
+    if (!domain) {
+      const yahooSymbols = [rawSymbol, `${baseSymbol}.NS`, `${baseSymbol}.BO`];
+      domain = await fetchDomainFromYahoo(yahooSymbols);
+      if (domain) {
+        stock.domain = domain;
+        await stock.save();
+      }
     }
 
     return res.json({
       symbol: stock.symbol,
       name: stock.name,
       exchange: stock.exchange,
-      domain: stock.domain || null,
+      domain,
       isNifty50: Boolean(stock.isNifty50),
     });
   } catch (error) {

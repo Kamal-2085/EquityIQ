@@ -1,7 +1,12 @@
 import "dotenv/config";
 import mongoose from "mongoose";
+import YahooFinance from "yahoo-finance2";
 import connectDB from "../src/config/db.js";
 import Stock from "../src/models/Stock.model.js";
+
+const yahooFinance = new YahooFinance({
+  suppressNotices: ["yahooSurvey"],
+});
 
 const nifty50Stocks = [
   {
@@ -176,7 +181,7 @@ const nifty50Stocks = [
     symbol: "ADANIENT",
     name: "Adani Enterprises Ltd",
     exchange: ["NSE", "BSE"],
-    domain: "adanient.com",
+    domain: "adani.com",
     isNifty50: true,
   },
   {
@@ -351,7 +356,7 @@ const nifty50Stocks = [
     symbol: "HDFCAMC",
     name: "HDFC Asset Management Company Ltd",
     exchange: ["NSE", "BSE"],
-    domain: "hdfcassetmanagement.com",
+    domain: "hdfcfund.com",
     isNifty50: true,
   },
 ];
@@ -369,6 +374,43 @@ const run = async () => {
 
   if (ops.length) {
     await Stock.bulkWrite(ops, { ordered: false });
+  }
+
+  const toBackfill = await Stock.find({
+    $or: [{ domain: null }, { domain: "" }],
+    isActive: true,
+  }).select("symbol name domain");
+
+  const extractDomain = (website) => {
+    if (!website) return null;
+    try {
+      const url = website.startsWith("http") ? website : `https://${website}`;
+      const hostname = new URL(url).hostname.replace(/^www\./i, "");
+      return hostname || null;
+    } catch {
+      return null;
+    }
+  };
+
+  for (const stock of toBackfill) {
+    const candidates = [`${stock.symbol}.NS`, `${stock.symbol}.BO`, stock.name];
+    let domain = null;
+    for (const candidate of candidates) {
+      try {
+        const data = await yahooFinance.quoteSummary(candidate, {
+          modules: ["summaryProfile"],
+        });
+        domain = extractDomain(data?.summaryProfile?.website || null);
+      } catch {
+        domain = null;
+      }
+      if (domain) break;
+    }
+    if (domain) {
+      stock.domain = domain;
+      await stock.save();
+      console.log(`Domain updated for ${stock.symbol}: ${domain}`);
+    }
   }
 
   console.log(`Seeded ${ops.length} NIFTY 50 stocks`);

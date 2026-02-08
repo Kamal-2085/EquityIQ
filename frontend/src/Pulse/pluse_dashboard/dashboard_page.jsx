@@ -118,6 +118,7 @@ const DashboardPage = () => {
   const [selectedStock, setSelectedStock] = useState(null);
   const [stockMeta, setStockMeta] = useState(null);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [cachedLogoUrl, setCachedLogoUrl] = useState(null);
   const [quoteData, setQuoteData] = useState({
     nse: null,
     bse: null,
@@ -139,6 +140,42 @@ const DashboardPage = () => {
     return String(rawSymbol)
       .replace(/\.NS$|\.BO$/i, "")
       .toUpperCase();
+  };
+
+  const getLogoCacheStorageKey = () => {
+    try {
+      const raw = localStorage.getItem("equityiq_user");
+      const parsed = raw ? JSON.parse(raw) : null;
+      const user = parsed?.user || parsed || {};
+      const userKey = user.id || user._id || user.email || "guest";
+      return `equityiq_logo_cache_${userKey}`;
+    } catch {
+      return "equityiq_logo_cache_guest";
+    }
+  };
+
+  const readLogoCache = (symbol) => {
+    try {
+      const storageKey = getLogoCacheStorageKey();
+      const raw = localStorage.getItem(storageKey);
+      const map = raw ? JSON.parse(raw) : {};
+      return map?.[symbol] || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const saveLogoCache = (symbol, url) => {
+    try {
+      if (!symbol || !url) return;
+      const storageKey = getLogoCacheStorageKey();
+      const raw = localStorage.getItem(storageKey);
+      const map = raw ? JSON.parse(raw) : {};
+      map[symbol] = url;
+      localStorage.setItem(storageKey, JSON.stringify(map));
+    } catch {
+      // ignore storage errors
+    }
   };
 
   const isInWatchlist = (stock) => {
@@ -206,6 +243,8 @@ const DashboardPage = () => {
         isActive = false;
       };
 
+    setCachedLogoUrl(readLogoCache(baseSymbol));
+
     const loadMeta = async () => {
       try {
         const res = await axios.get(
@@ -213,6 +252,11 @@ const DashboardPage = () => {
         );
         if (!isActive) return;
         setStockMeta(res.data || null);
+        if (res.data?.domain) {
+          const url = `https://img.logo.dev/${res.data.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`;
+          saveLogoCache(baseSymbol, url);
+          setCachedLogoUrl(url);
+        }
       } catch {
         if (!isActive) return;
         setStockMeta(null);
@@ -395,9 +439,12 @@ const DashboardPage = () => {
     return "text-gray-500";
   };
 
-  const showLogo = Boolean(
-    stockMeta?.isNifty50 && stockMeta?.domain && !logoFailed,
-  );
+  const logoUrl =
+    cachedLogoUrl ||
+    (stockMeta?.domain
+      ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
+      : null);
+  const showLogo = Boolean(logoUrl && !logoFailed);
 
   const listSelector = (
     <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1">
@@ -597,7 +644,7 @@ const DashboardPage = () => {
               <div className="flex items-center gap-3">
                 {showLogo ? (
                   <img
-                    src={`https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`}
+                    src={logoUrl}
                     alt={selectedStock.name}
                     className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain"
                     onError={() => setLogoFailed(true)}
@@ -665,6 +712,7 @@ const DashboardPage = () => {
                   selectedStock.name,
                   selectedStock.nse || selectedStock.bse,
                 )}
+                state={{ logoUrl }}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
               >
                 View More Details

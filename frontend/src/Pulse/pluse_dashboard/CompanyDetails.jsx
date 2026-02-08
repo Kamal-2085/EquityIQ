@@ -29,6 +29,7 @@ const CompanyDetails = () => {
     () => new URLSearchParams(location.search),
     [location.search],
   );
+  const logoUrlFromState = location.state?.logoUrl || null;
   const initialSymbol = searchParams.get("symbol") || "";
 
   const [resolvedSymbol, setResolvedSymbol] = useState(initialSymbol);
@@ -38,6 +39,7 @@ const CompanyDetails = () => {
   const [stockMeta, setStockMeta] = useState(null);
   const [stockPrice, setStockPrice] = useState(null);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [logoSrc, setLogoSrc] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [timeframe, setTimeframe] = useState("1M");
   const [isLoading, setIsLoading] = useState(false);
@@ -50,6 +52,21 @@ const CompanyDetails = () => {
   const { watchlist, setWatchlist } = useWatchlist();
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
+
+  const domainLogoUrl = stockMeta?.domain
+    ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
+    : null;
+  const nameLogoUrl = decodedName
+    ? `https://img.logo.dev/${encodeURIComponent(
+        decodedName,
+      )}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
+    : null;
+
+  useEffect(() => {
+    const nextLogo = logoUrlFromState || domainLogoUrl || nameLogoUrl;
+    setLogoSrc(nextLogo || null);
+    setLogoFailed(false);
+  }, [logoUrlFromState, domainLogoUrl, nameLogoUrl]);
 
   useEffect(() => {
     setResolvedSymbol(initialSymbol);
@@ -295,12 +312,22 @@ const CompanyDetails = () => {
         <div className="flex-1 flex flex-col">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {stockMeta?.domain && !logoFailed ? (
+              {logoSrc && !logoFailed ? (
                 <img
-                  src={`https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`}
+                  src={logoSrc}
                   alt={decodedName || "Company"}
                   className="h-10 w-10 rounded-md border border-gray-200 bg-white object-contain"
-                  onError={() => setLogoFailed(true)}
+                  onError={() => {
+                    if (logoSrc === logoUrlFromState && domainLogoUrl) {
+                      setLogoSrc(domainLogoUrl);
+                      return;
+                    }
+                    if (logoSrc !== nameLogoUrl && nameLogoUrl) {
+                      setLogoSrc(nameLogoUrl);
+                      return;
+                    }
+                    setLogoFailed(true);
+                  }}
                 />
               ) : (
                 <div className="flex h-10 w-10 items-center justify-center rounded-md bg-gray-200 text-sm font-semibold text-gray-700">
@@ -561,7 +588,9 @@ const CompanyDetails = () => {
                 <p className="mt-1 text-xs text-gray-500">
                   {(item.publisher || item.source || "Unknown") + " \u2022 "}
                   {item.publishedAt
-                    ? new Date(item.publishedAt * 1000).toLocaleString()
+                    ? new Date(item.publishedAt * 1000).toLocaleDateString(
+                        "en-GB",
+                      )
                     : item.publishedAtText || ""}
                 </p>
               </a>
