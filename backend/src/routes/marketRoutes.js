@@ -6,8 +6,6 @@ const router = express.Router();
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
 });
-const newsCache = new Map();
-const NEWS_CACHE_TTL = 5 * 60 * 1000;
 const profileCache = new Map();
 const priceCache = new Map();
 const fundamentalsCache = new Map();
@@ -22,8 +20,6 @@ const getCachedValue = (cache, symbol, ttl) => {
   }
   return cached.data;
 };
-const getCachedNews = (symbol) =>
-  getCachedValue(newsCache, symbol, NEWS_CACHE_TTL);
 router.get("/chart/:symbol", async (req, res) => {
   try {
     const symbol = req.params.symbol;
@@ -407,88 +403,6 @@ router.get("/fundamentals/:symbol", async (req, res) => {
   }
 });
 
-// GET latest news for a stock
-router.get("/news/:symbol", async (req, res) => {
-  try {
-    const rawSymbol = String(req.params.symbol || "").trim();
-    if (!rawSymbol) {
-      return res.status(400).json({ message: "symbol is required" });
-    }
-
-    const symbol = rawSymbol.toUpperCase();
-    const cached = getCachedNews(symbol);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    const baseSymbol = symbol.replace(/\.NS$|\.BO$/i, "");
-    let quoteProfile = null;
-    try {
-      quoteProfile = await yahooFinance.quote(symbol);
-    } catch (error) {
-      quoteProfile = null;
-    }
-    const nameCandidates = [
-      quoteProfile?.longName,
-      quoteProfile?.shortName,
-      quoteProfile?.displayName,
-      quoteProfile?.name,
-      baseSymbol,
-    ]
-      .filter(Boolean)
-      .map((value) => String(value).toUpperCase());
-
-    const search = await yahooFinance.search(baseSymbol || symbol, {
-      quotesCount: 0,
-      newsCount: 6,
-      enableFuzzyQuery: true,
-    });
-    const searchNews = Array.isArray(search?.news) ? search.news : [];
-    const filteredNews = searchNews.filter((item) => {
-      const related = Array.isArray(item?.relatedTickers)
-        ? item.relatedTickers
-        : [];
-      const title = String(item?.title || "").toUpperCase();
-      const summary = String(
-        item?.summary || item?.description || "",
-      ).toUpperCase();
-      const matchesName = nameCandidates.some(
-        (name) => title.includes(name) || summary.includes(name),
-      );
-      return (
-        related.some((ticker) => {
-          const normalized = String(ticker || "").toUpperCase();
-          return normalized === symbol || normalized === baseSymbol;
-        }) || matchesName
-      );
-    });
-    const newsToUse = filteredNews.length > 0 ? filteredNews : searchNews;
-    const formattedNews = newsToUse.map((item) => ({
-      title: item?.title || "",
-      link: item?.link || "",
-      publisher: item?.publisher || "",
-      publishedAt: item?.providerPublishTime || null,
-      image: item?.thumbnail?.resolutions?.[0]?.url || null,
-      relatedTickers: item?.relatedTickers || [],
-    }));
-
-    const payload = {
-      symbol,
-      results: formattedNews,
-      source: "Yahoo Finance",
-      disclaimer:
-        "News is provided for informational purposes only. EquityIQ does not verify third-party content.",
-    };
-
-    newsCache.set(symbol, { time: Date.now(), data: payload });
-
-    return res.json(payload);
-  } catch (error) {
-    console.error("Yahoo Finance news fetch failed:", error?.message || error);
-    return res.status(500).json({ message: "Failed to fetch news" });
-  }
-});
-
 router.get("/nifty50", async (req, res) => {
   try {
     const stocks = await Stock.find({ isNifty50: true, isActive: true })
@@ -541,6 +455,24 @@ router.get("/stocks/:symbol", async (req, res) => {
   } catch (error) {
     console.error("Stock fetch failed:", error?.message || error);
     return res.status(500).json({ message: "Failed to fetch stock" });
+  }
+});
+import { fetchCompanyNews } from "../services/news.services.js";
+
+router.get("/news/:company", async (req, res) => {
+  try {
+    const company = req.params.company;
+
+    const news = await fetchCompanyNews(company);
+
+    return res.json({
+      results: news.slice(0, 6),
+      source: "Google News (SerpAPI)",
+      disclaimer: "News for informational purposes only",
+    });
+  } catch (error) {
+    console.error("News fetch failed:", error.message);
+    return res.status(500).json({ message: "Failed to fetch news" });
   }
 });
 

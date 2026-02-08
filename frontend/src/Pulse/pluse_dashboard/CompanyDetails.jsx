@@ -203,7 +203,8 @@ const CompanyDetails = () => {
         setFundamentals({});
       });
 
-    fetch(`/api/market/news/${encodeURIComponent(resolvedSymbol)}`)
+    const newsQuery = decodedName || resolvedSymbol;
+    fetch(`/api/market/news/${encodeURIComponent(newsQuery)}`)
       .then((res) => res.json())
       .then((json) => {
         if (!isActive) return;
@@ -558,10 +559,10 @@ const CompanyDetails = () => {
               >
                 <p className="font-medium text-gray-900">{item.title}</p>
                 <p className="mt-1 text-xs text-gray-500">
-                  {item.publisher} •{" "}
+                  {(item.publisher || item.source || "Unknown") + " \u2022 "}
                   {item.publishedAt
                     ? new Date(item.publishedAt * 1000).toLocaleString()
-                    : ""}
+                    : item.publishedAtText || ""}
                 </p>
               </a>
             ))}
