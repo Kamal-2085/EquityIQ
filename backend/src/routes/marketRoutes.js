@@ -421,12 +421,49 @@ router.get("/news/:symbol", async (req, res) => {
       return res.json(cached);
     }
 
-    const data = await yahooFinance.quoteSummary(symbol, {
-      modules: ["news"],
-    });
+    const baseSymbol = symbol.replace(/\.NS$|\.BO$/i, "");
+    let quoteProfile = null;
+    try {
+      quoteProfile = await yahooFinance.quote(symbol);
+    } catch (error) {
+      quoteProfile = null;
+    }
+    const nameCandidates = [
+      quoteProfile?.longName,
+      quoteProfile?.shortName,
+      quoteProfile?.displayName,
+      quoteProfile?.name,
+      baseSymbol,
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).toUpperCase());
 
-    const news = Array.isArray(data?.news) ? data.news : [];
-    let formattedNews = news.map((item) => ({
+    const search = await yahooFinance.search(baseSymbol || symbol, {
+      quotesCount: 0,
+      newsCount: 6,
+      enableFuzzyQuery: true,
+    });
+    const searchNews = Array.isArray(search?.news) ? search.news : [];
+    const filteredNews = searchNews.filter((item) => {
+      const related = Array.isArray(item?.relatedTickers)
+        ? item.relatedTickers
+        : [];
+      const title = String(item?.title || "").toUpperCase();
+      const summary = String(
+        item?.summary || item?.description || "",
+      ).toUpperCase();
+      const matchesName = nameCandidates.some(
+        (name) => title.includes(name) || summary.includes(name),
+      );
+      return (
+        related.some((ticker) => {
+          const normalized = String(ticker || "").toUpperCase();
+          return normalized === symbol || normalized === baseSymbol;
+        }) || matchesName
+      );
+    });
+    const newsToUse = filteredNews.length > 0 ? filteredNews : searchNews;
+    const formattedNews = newsToUse.map((item) => ({
       title: item?.title || "",
       link: item?.link || "",
       publisher: item?.publisher || "",
@@ -434,27 +471,6 @@ router.get("/news/:symbol", async (req, res) => {
       image: item?.thumbnail?.resolutions?.[0]?.url || null,
       relatedTickers: item?.relatedTickers || [],
     }));
-
-    if (formattedNews.length === 0) {
-      try {
-        const search = await yahooFinance.search(symbol, {
-          quotesCount: 0,
-          newsCount: 6,
-          enableFuzzyQuery: true,
-        });
-        const searchNews = Array.isArray(search?.news) ? search.news : [];
-        formattedNews = searchNews.map((item) => ({
-          title: item?.title || "",
-          link: item?.link || "",
-          publisher: item?.publisher || "",
-          publishedAt: item?.providerPublishTime || null,
-          image: item?.thumbnail?.resolutions?.[0]?.url || null,
-          relatedTickers: item?.relatedTickers || [],
-        }));
-      } catch (searchError) {
-        formattedNews = [];
-      }
-    }
 
     const payload = {
       symbol,

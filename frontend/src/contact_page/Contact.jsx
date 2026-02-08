@@ -1,7 +1,21 @@
 import React from "react";
+import toast from "react-hot-toast";
 import { FaPhoneAlt } from "react-icons/fa";
 import Issue_resolver from "./Footer";
+import { useAuth } from "../auth/AuthProvider";
+import { useNavigate } from "react-router-dom";
 const Contact = () => {
+  const { accessToken, loading } = useAuth();
+  const navigate = useNavigate();
+
+  const handleCreateTicket = () => {
+    if (loading) return;
+    if (!accessToken) {
+      toast.error("Please Signup/Login first");
+      return;
+    }
+    navigate("/create-ticket");
+  };
   return (
     <section className="bg-white py-30">
       <div className="max-w-6xl mx-auto px-6">
@@ -18,7 +32,11 @@ const Contact = () => {
               Support portal
             </h2>
             <p className="text-gray-600 mb-4">Have a query?</p>
-            <button className="bg-blue-600 text-white px-5 py-2 rounded text-sm hover:bg-blue-700 transition cursor-pointer">
+            <button
+              type="button"
+              onClick={handleCreateTicket}
+              className="bg-blue-600 text-white px-5 py-2 rounded text-sm hover:bg-blue-700 transition cursor-pointer"
+            >
               Create a ticket
             </button>
           </div>
@@ -38,9 +56,7 @@ const Contact = () => {
 
           {/* Support */}
           <div>
-            <h2 className="text-lg font-medium text-gray-900 mb-2">
-              Support
-            </h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-2">Support</h2>
             <p className="text-gray-600">Monday – Friday</p>
             <p className="text-gray-600 mb-3">8:30 AM – 5:00 PM</p>
             <div className="flex items-center gap-2 text-gray-700">
@@ -77,9 +93,8 @@ const Contact = () => {
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">HQ</h3>
             <p className="text-gray-600 leading-relaxed">
-              EquityIQ, #153/154, 4th Cross, J.P Nagar 4th Phase,
-              Opp. Clarence Public School,
-              Bengaluru – 560078
+              EquityIQ, #153/154, 4th Cross, J.P Nagar 4th Phase, Opp. Clarence
+              Public School, Bengaluru – 560078
             </p>
           </div>
 
@@ -88,10 +103,8 @@ const Contact = () => {
               Support & mailing address
             </h3>
             <p className="text-gray-600 leading-relaxed">
-              EquityIQ, #192A 4th Floor,
-              Kalyani Vista, 3rd Main Road,
-              JP Nagar 4th Phase,
-              Bengaluru – 560076
+              EquityIQ, #192A 4th Floor, Kalyani Vista, 3rd Main Road, JP Nagar
+              4th Phase, Bengaluru – 560076
             </p>
           </div>
         </div>
@@ -102,4 +115,3 @@ const Contact = () => {
 };
 
 export default Contact;
-

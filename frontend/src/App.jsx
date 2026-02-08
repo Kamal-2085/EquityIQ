@@ -30,6 +30,7 @@ import Forgot_password_page from "./forgot_passwod/Forgot_password_page.jsx";
 import Update_user_password from "./forgot_passwod/Update_user_password.jsx";
 import Transaction_history_page from "./transaction_history/Transaction_history_page.jsx";
 import Policies from "./policies/Policies.jsx";
+import Create_Ticket from "./ticket/Create_Ticket.jsx";
 const LandingLayout = () => (
   <>
     <Navbar />
@@ -72,6 +73,7 @@ const App = () => {
           />
           <Route path="*" element={<Not_found />} />
           <Route path="/policies" element={<Policies />} />
+          <Route path="/create-ticket" element={<Create_Ticket />} />
         </Route>
 
         <Route path="/pulse" element={<PulseLayout />}>
