@@ -1,6 +1,50 @@
-import React from "react";
+import React, { useState } from "react";
+import toast from "react-hot-toast";
+import api from "../auth/apiClient";
+import { useAuth } from "../auth/AuthProvider";
+import { useNavigate } from "react-router-dom";
 
 const Create_Ticket = () => {
+  const { accessToken, loading } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [issue, setIssue] = useState("");
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (loading) return;
+    if (!accessToken) {
+      toast.error("Please Signup/Login first");
+      return;
+    }
+    const trimmedIssue = issue.trim();
+    const trimmedMessage = message.trim();
+    if (!trimmedIssue || !trimmedMessage) {
+      toast.error("Issue and message are required");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      await api.post("/auth/tickets", {
+        issue: trimmedIssue,
+        message: trimmedMessage,
+      });
+      toast.success("Ticket Raised Successfully");
+      setIssue("");
+      setMessage("");
+      setEmail("");
+      navigate("/");
+    } catch (error) {
+      const errMsg = error?.response?.data?.message || "Failed to raise ticket";
+      toast.error(errMsg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <section className="bg-white py-30">
       <div className="max-w-6xl mx-auto px-6">
@@ -17,24 +61,26 @@ const Create_Ticket = () => {
               Send Your Message
             </h2>
 
-            <form className="mt-5 space-y-4">
+            <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
               <label className="block">
                 <span className="text-sm font-medium text-gray-700">
                   Email Address
                 </span>
                 <input
-                  type="text"
-                  placeholder="Enter your fullname"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Enter your email address"
                   className="mt-2 w-full rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </label>
 
               <label className="block">
-                <span className="text-sm font-medium text-gray-700">
-                  Issue
-                </span>
+                <span className="text-sm font-medium text-gray-700">Issue</span>
                 <input
-                  type="email"
+                  type="text"
+                  value={issue}
+                  onChange={(event) => setIssue(event.target.value)}
                   placeholder="Enter your issue"
                   className="mt-2 w-full rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -46,6 +92,8 @@ const Create_Ticket = () => {
                 </span>
                 <textarea
                   rows={4}
+                  value={message}
+                  onChange={(event) => setMessage(event.target.value)}
                   placeholder="Describe your issue in detail"
                   className="mt-2 w-full rounded-md border border-slate-200 bg-white px-4 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
@@ -53,9 +101,10 @@ const Create_Ticket = () => {
 
               <button
                 type="submit"
-                className="inline-flex items-center justify-center rounded-full bg-black px-6 py-2 text-sm font-medium text-white hover:bg-gray-900 transition"
+                className="inline-flex items-center justify-center rounded-full bg-black px-6 py-2 text-sm font-medium text-white hover:bg-gray-900 transition disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSubmitting}
               >
-                Send
+                {isSubmitting ? "Sending..." : "Send"}
               </button>
             </form>
           </div>

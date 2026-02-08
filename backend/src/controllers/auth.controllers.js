@@ -8,6 +8,7 @@ import {
   sendBankAccountAddedEmail,
   sendWithdrawalRequestEmail,
   sendWelcomeEmail,
+  sendSupportTicketEmail,
 } from "../services/mails.services.js";
 import cloudinary from "../config/cloudinary.js";
 import streamifier from "streamifier";
@@ -831,6 +832,77 @@ export const updateProfileImage = async (req, res) => {
   } catch (error) {
     console.error("Profile image update failed:", error);
     res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+export const createTicket = async (req, res) => {
+  try {
+    const { issue, message } = req.body;
+    const normalizedTitle = String(issue || "").trim();
+    const normalizedDesc = String(message || "").trim();
+
+    if (!normalizedTitle || !normalizedDesc) {
+      return res
+        .status(400)
+        .json({ message: "Issue and message are required" });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const ticketId = String(
+      Math.floor(100000000000 + Math.random() * 900000000000),
+    );
+
+    user.tickets = user.tickets || [];
+    user.tickets.push({
+      ticketId,
+      title: normalizedTitle,
+      desc: normalizedDesc,
+    });
+    await user.save();
+
+    const savedTicket = user.tickets[user.tickets.length - 1];
+    const raisedOn = new Date(
+      savedTicket.createdAt || Date.now(),
+    ).toLocaleString();
+    try {
+      await sendSupportTicketEmail({
+        to: user.email,
+        name: user.name,
+        ticketId: savedTicket.ticketId,
+        issueTitle: savedTicket.title,
+        raisedOn,
+      });
+    } catch (mailError) {
+      console.error("Support ticket email failed:", mailError);
+    }
+    return res.status(201).json({
+      message: "Ticket created",
+      ticket: savedTicket,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const getTickets = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("tickets");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const tickets = Array.isArray(user.tickets) ? user.tickets : [];
+    const ordered = [...tickets].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    );
+
+    return res.status(200).json({ tickets: ordered });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
   }
 };
 

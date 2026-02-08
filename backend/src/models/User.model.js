@@ -70,6 +70,17 @@ const userSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    tickets: {
+      type: [
+        {
+          ticketId: { type: String, required: true, trim: true },
+          title: { type: String, required: true, trim: true },
+          desc: { type: String, required: true, trim: true },
+          createdAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     avatarUrl: {
       type: String,
       default: null,

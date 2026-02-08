@@ -234,3 +234,44 @@ export const sendAddMoneyEmail = async ({
     ...(replyTo ? { replyTo } : {}),
   });
 };
+
+export const sendSupportTicketEmail = async ({
+  to,
+  name,
+  ticketId,
+  issueTitle,
+  raisedOn,
+}) => {
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const replyTo = process.env.SMTP_REPLY_TO;
+
+  const subject = "Your EquityIQ support ticket is open";
+  const text = `Hi ${name},\n\nThank you for reaching out to EquityIQ Support.\n\nWe’ve successfully received your request and created a support ticket for it. Our team is currently reviewing the details and will get back to you as soon as possible.\n\nTicket details\n\n* Ticket ID: ${ticketId}\n* Issue: ${issueTitle}\n* Status: Open\n* Raised on: ${raisedOn}\n\nWhat happens next?\n\nOur support team will review your issue and respond via this email. Most queries are addressed within 24–48 hours.\n\nIf you have additional information to share, simply reply to this email and it will be added to your ticket.\n\nThank you for your patience and for using EquityIQ.\n\nWarm regards,\nEquityIQ Support Team`;
+  const html = `
+    <p>Hi ${name},</p>
+    <p>Thank you for reaching out to <strong>EquityIQ Support</strong>.</p>
+    <p>We’ve successfully received your request and created a support ticket for it. Our team is currently reviewing the details and will get back to you as soon as possible.</p>
+    <h3>📄 Ticket details</h3>
+    <ul>
+      <li><strong>Ticket ID:</strong> ${ticketId}</li>
+      <li><strong>Issue:</strong> ${issueTitle}</li>
+      <li><strong>Status:</strong> Open</li>
+      <li><strong>Raised on:</strong> ${raisedOn}</li>
+    </ul>
+    <h3>⏳ What happens next?</h3>
+    <p>Our support team will review your issue and respond via this email. Most queries are addressed within <strong>24–48 hours</strong>.</p>
+    <p>If you have additional information to share, simply reply to this email and it will be added to your ticket.</p>
+    <p>Thank you for your patience and for using EquityIQ.</p>
+    <p>Warm regards,<br /><strong>EquityIQ Support Team</strong></p>
+  `;
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    ...(replyTo ? { replyTo } : {}),
+  });
+};
