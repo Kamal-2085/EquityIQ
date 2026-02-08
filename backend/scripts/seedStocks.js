@@ -8,6 +8,17 @@ const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
 });
 
+const extractDomain = (website) => {
+  if (!website) return null;
+  try {
+    const url = website.startsWith("http") ? website : `https://${website}`;
+    const hostname = new URL(url).hostname.replace(/^www\./i, "");
+    return hostname || null;
+  } catch {
+    return null;
+  }
+};
+
 const nifty50Stocks = [
   {
     symbol: "RELIANCE",
@@ -380,17 +391,6 @@ const run = async () => {
     $or: [{ domain: null }, { domain: "" }],
     isActive: true,
   }).select("symbol name domain");
-
-  const extractDomain = (website) => {
-    if (!website) return null;
-    try {
-      const url = website.startsWith("http") ? website : `https://${website}`;
-      const hostname = new URL(url).hostname.replace(/^www\./i, "");
-      return hostname || null;
-    } catch {
-      return null;
-    }
-  };
 
   for (const stock of toBackfill) {
     const candidates = [`${stock.symbol}.NS`, `${stock.symbol}.BO`, stock.name];
