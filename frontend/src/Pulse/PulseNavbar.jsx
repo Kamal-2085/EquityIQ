@@ -181,6 +181,7 @@ const PulseNavbar = () => {
       } catch {}
     }
     const watchlistKey = `equityiq_watchlist_${userKey}`;
+    const logoCacheKey = `equityiq_logo_cache_${userKey}`;
     const cachedWatchlist = (() => {
       const raw = localStorage.getItem(watchlistKey);
       if (!raw) return [];
@@ -208,6 +209,7 @@ const PulseNavbar = () => {
     localStorage.removeItem("equityiq_user");
     localStorage.removeItem("equityiq_access_token");
     localStorage.removeItem(watchlistKey);
+    localStorage.removeItem(logoCacheKey);
     sessionStorage.removeItem("market-toast-shown");
     window.dispatchEvent(new Event("equityiq_user_updated"));
     setAccessToken(null);

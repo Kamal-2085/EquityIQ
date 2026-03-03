@@ -165,22 +165,47 @@ const DashboardPage = () => {
       const storageKey = getLogoCacheStorageKey();
       const raw = localStorage.getItem(storageKey);
       const map = raw ? JSON.parse(raw) : {};
-      return map?.[symbol] || null;
+      const entry = map?.[symbol] || null;
+      if (!entry) return null;
+      if (typeof entry === "string") {
+        return entry.startsWith("data:image/")
+          ? { dataUrl: entry, url: null }
+          : { dataUrl: null, url: entry };
+      }
+      return {
+        dataUrl: entry.dataUrl || null,
+        url: entry.url || null,
+      };
     } catch {
       return null;
     }
   };
 
-  const saveLogoCache = (symbol, url) => {
+  const saveLogoCache = (symbol, entry) => {
     try {
-      if (!symbol || !url) return;
+      if (!symbol || !entry) return;
       const storageKey = getLogoCacheStorageKey();
       const raw = localStorage.getItem(storageKey);
       const map = raw ? JSON.parse(raw) : {};
-      map[symbol] = url;
+      map[symbol] = entry;
       localStorage.setItem(storageKey, JSON.stringify(map));
     } catch {
       // ignore storage errors
+    }
+  };
+
+  const fetchLogoDataUrl = async (url) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      return await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result || null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
     }
   };
 
@@ -249,7 +274,30 @@ const DashboardPage = () => {
         isActive = false;
       };
 
-    setCachedLogoUrl(readLogoCache(baseSymbol));
+    const cachedEntry = readLogoCache(baseSymbol);
+    if (cachedEntry?.dataUrl) {
+      setCachedLogoUrl(cachedEntry.dataUrl);
+      return () => {
+        isActive = false;
+      };
+    }
+    if (cachedEntry?.url) {
+      setCachedLogoUrl(cachedEntry.url);
+    }
+
+    const cacheLogoDataUrl = async (symbol, url) => {
+      const dataUrl = await fetchLogoDataUrl(url);
+      if (!dataUrl) return;
+      saveLogoCache(symbol, { url, dataUrl });
+      if (isActive) setCachedLogoUrl(dataUrl);
+    };
+
+    if (cachedEntry?.url) {
+      cacheLogoDataUrl(baseSymbol, cachedEntry.url);
+      return () => {
+        isActive = false;
+      };
+    }
 
     const loadMeta = async () => {
       try {
@@ -260,8 +308,11 @@ const DashboardPage = () => {
         setStockMeta(res.data || null);
         if (res.data?.domain) {
           const url = `https://img.logo.dev/${res.data.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`;
-          saveLogoCache(baseSymbol, url);
-          setCachedLogoUrl(url);
+          if (!cachedEntry?.dataUrl) {
+            saveLogoCache(baseSymbol, { url, dataUrl: null });
+            if (!cachedEntry?.url) setCachedLogoUrl(url);
+            cacheLogoDataUrl(baseSymbol, url);
+          }
         }
       } catch {
         if (!isActive) return;

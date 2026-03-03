@@ -20,6 +20,44 @@ const TIMEFRAMES = {
   ALL: { range: "max", interval: "1mo" },
 };
 
+const getBaseSymbol = (symbol) =>
+  String(symbol || "")
+    .replace(/\.NS$|\.BO$/i, "")
+    .toUpperCase();
+
+const getLogoCacheStorageKey = () => {
+  try {
+    const raw = localStorage.getItem("equityiq_user");
+    const parsed = raw ? JSON.parse(raw) : null;
+    const user = parsed?.user || parsed || {};
+    const userKey = user.id || user._id || user.email || "guest";
+    return `equityiq_logo_cache_${userKey}`;
+  } catch {
+    return "equityiq_logo_cache_guest";
+  }
+};
+
+const readLogoCache = (symbol) => {
+  try {
+    const storageKey = getLogoCacheStorageKey();
+    const raw = localStorage.getItem(storageKey);
+    const map = raw ? JSON.parse(raw) : {};
+    const entry = map?.[symbol] || null;
+    if (!entry) return null;
+    if (typeof entry === "string") {
+      return entry.startsWith("data:image/")
+        ? { dataUrl: entry, url: null }
+        : { dataUrl: null, url: entry };
+    }
+    return {
+      dataUrl: entry.dataUrl || null,
+      url: entry.url || null,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const CompanyDetails = () => {
   const { company_name } = useParams();
   const location = useLocation();
@@ -36,7 +74,6 @@ const CompanyDetails = () => {
   const [symbolOptions, setSymbolOptions] = useState([]);
   const [activeExchange, setActiveExchange] = useState("NSE");
   const [exchangeOpen, setExchangeOpen] = useState(false);
-  const [stockMeta, setStockMeta] = useState(null);
   const [stockPrice, setStockPrice] = useState(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [logoSrc, setLogoSrc] = useState(null);
@@ -53,20 +90,17 @@ const CompanyDetails = () => {
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
 
-  const domainLogoUrl = stockMeta?.domain
-    ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
-    : null;
-  const nameLogoUrl = decodedName
-    ? `https://img.logo.dev/${encodeURIComponent(
-        decodedName,
-      )}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
-    : null;
-
   useEffect(() => {
-    const nextLogo = logoUrlFromState || domainLogoUrl || nameLogoUrl;
+    const baseSymbol = resolvedSymbol ? getBaseSymbol(resolvedSymbol) : "";
+    const cachedEntry = baseSymbol ? readLogoCache(baseSymbol) : null;
+    const cachedLogo = cachedEntry?.dataUrl || null;
+    const stateLogo =
+      typeof logoUrlFromState === "string" ? logoUrlFromState : null;
+    const nextLogo =
+      stateLogo && stateLogo.startsWith("data:image/") ? stateLogo : cachedLogo;
     setLogoSrc(nextLogo || null);
     setLogoFailed(false);
-  }, [logoUrlFromState, domainLogoUrl, nameLogoUrl]);
+  }, [logoUrlFromState, resolvedSymbol]);
 
   useEffect(() => {
     setResolvedSymbol(initialSymbol);
@@ -155,33 +189,6 @@ const CompanyDetails = () => {
       isActive = false;
     };
   }, [resolvedSymbol, timeframe]);
-
-  useEffect(() => {
-    if (!resolvedSymbol) return;
-
-    const baseSymbol = String(resolvedSymbol)
-      .replace(/\.NS$|\.BO$/i, "")
-      .toUpperCase();
-
-    let isActive = true;
-    setLogoFailed(false);
-    setStockMeta(null);
-
-    fetch(`/api/market/stocks/${encodeURIComponent(baseSymbol)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!isActive) return;
-        setStockMeta(json || null);
-      })
-      .catch(() => {
-        if (!isActive) return;
-        setStockMeta(null);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [resolvedSymbol]);
 
   useEffect(() => {
     if (!resolvedSymbol) return;
@@ -475,11 +482,7 @@ const CompanyDetails = () => {
           ) : (
             <OrderPanel
               companyName={decodedName || "Company"}
-              companyLogoUrl={
-                stockMeta?.domain && !logoFailed
-                  ? `https://img.logo.dev/${stockMeta.domain}?token=pk_eiiL7jOpTwKcZmwob22skQ&size=80&retina=true`
-                  : ""
-              }
+              companyLogoUrl={logoSrc && !logoFailed ? logoSrc : ""}
               exchangeLabel={activeExchange}
               marketPrice={stockPrice}
             />

@@ -126,6 +126,13 @@ const Navbar = () => {
     } catch (e) {
       // ignore errors
     }
+    try {
+      const rawUser = localStorage.getItem("equityiq_user");
+      const parsed = rawUser ? JSON.parse(rawUser) : null;
+      const user = parsed?.user || parsed || {};
+      const userKey = user.id || user._id || user.email || "guest";
+      localStorage.removeItem(`equityiq_logo_cache_${userKey}`);
+    } catch {}
     localStorage.removeItem("equityiq_user");
     sessionStorage.removeItem("market-toast-shown");
     window.dispatchEvent(new Event("equityiq_user_updated"));
