@@ -1,4 +1,5 @@
 const listeners = new Map();
+const chartRequests = new Map();
 let socket = null;
 let reconnectTimer = null;
 let pendingMessages = [];
@@ -26,6 +27,13 @@ const removeListener = (type, handler) => {
 };
 
 const dispatchMessage = (message) => {
+  if (message?.type === "chart" && message?.requestId) {
+    const handler = chartRequests.get(message.requestId);
+    if (handler) {
+      chartRequests.delete(message.requestId);
+      handler(message);
+    }
+  }
   const handlers = listeners.get(message?.type);
   if (!handlers) return;
   handlers.forEach((handler) => handler(message));
@@ -124,4 +132,33 @@ export const setQuoteSymbols = (symbols) => {
   } else {
     sendMessage({ type: "unsubscribe_quotes" });
   }
+};
+
+export const requestChartData = ({ symbol, range, interval }) => {
+  if (!symbol) return Promise.reject(new Error("Missing symbol"));
+  connect();
+  return new Promise((resolve, reject) => {
+    const requestId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const timeoutId = window.setTimeout(() => {
+      chartRequests.delete(requestId);
+      reject(new Error("Chart request timed out"));
+    }, 15000);
+
+    chartRequests.set(requestId, (message) => {
+      window.clearTimeout(timeoutId);
+      if (message?.error) {
+        reject(new Error(message.error));
+        return;
+      }
+      resolve(message);
+    });
+
+    sendMessage({
+      type: "chart_request",
+      requestId,
+      symbol,
+      range,
+      interval,
+    });
+  });
 };

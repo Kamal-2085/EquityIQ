@@ -1,5 +1,6 @@
 import { WebSocketServer } from "ws";
 import YahooFinance from "yahoo-finance2";
+import { getChartData } from "../services/yahoo.services.js";
 
 const OPEN_STATE = 1;
 const TICK_INTERVAL_MS = 1000;
@@ -165,6 +166,36 @@ export const startMarketSocket = (server) => {
           state.symbols.clear();
           stopIntervalIfIdle();
           break;
+        case "chart_request": {
+          const symbol = String(message?.symbol || "").trim();
+          const range = String(message?.range || "1mo").trim();
+          const interval = String(message?.interval || "5m").trim();
+          const requestId = String(message?.requestId || "");
+          if (!symbol || !requestId) return;
+          getChartData(symbol, range, interval)
+            .then((result) => {
+              if (ws.readyState !== OPEN_STATE) return;
+              ws.send(
+                JSON.stringify({
+                  type: "chart",
+                  requestId,
+                  data: result?.data || [],
+                  meta: result?.meta || null,
+                }),
+              );
+            })
+            .catch((error) => {
+              if (ws.readyState !== OPEN_STATE) return;
+              ws.send(
+                JSON.stringify({
+                  type: "chart",
+                  requestId,
+                  error: error?.message || "Failed to load chart",
+                }),
+              );
+            });
+          break;
+        }
         default:
           break;
       }

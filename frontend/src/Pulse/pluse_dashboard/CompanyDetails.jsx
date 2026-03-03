@@ -9,6 +9,7 @@ import { useWatchlist } from "./Watchlist.jsx";
 import toast from "react-hot-toast";
 import { IoMdAlarm } from "react-icons/io";
 import { FaCartPlus } from "react-icons/fa";
+import { requestChartData } from "../../services/marketSocket";
 const TIMEFRAMES = {
   "1D": { range: "1d", interval: "1m" },
   "1W": { range: "5d", interval: "5m" },
@@ -167,15 +168,14 @@ const CompanyDetails = () => {
     setIsLoading(true);
     setError("");
 
-    fetch(
-      `/api/market/chart/${encodeURIComponent(
-        resolvedSymbol,
-      )}?range=${range}&interval=${interval}`,
-    )
-      .then((res) => res.json())
-      .then((json) => {
+    requestChartData({
+      symbol: resolvedSymbol,
+      range,
+      interval,
+    })
+      .then((message) => {
         if (!isActive) return;
-        setChartData(Array.isArray(json?.data) ? json.data : []);
+        setChartData(Array.isArray(message?.data) ? message.data : []);
         setIsLoading(false);
       })
       .catch(() => {
