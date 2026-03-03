@@ -6,6 +6,11 @@ import ProfileMenu from "../components/ProfileMenu.jsx";
 import StockChart from "../components/StockChart.jsx";
 import img8 from "../assets/img8.png";
 import api from "../auth/apiClient";
+import {
+  addMarketListener,
+  removeMarketListener,
+  setIndicesSubscription,
+} from "../services/marketSocket";
 import { useAuth } from "../auth/AuthProvider";
 
 const INDEX_TIMEFRAMES = {
@@ -72,26 +77,21 @@ const PulseNavbar = () => {
   }, []);
 
   useEffect(() => {
-    let intervalId;
-
-    const fetchMarketData = async () => {
-      try {
-        const res = await api.get("/market/indices");
-        setMarketData({
-          nifty: res.data?.nifty || null,
-          sensex: res.data?.sensex || null,
-          disclaimer: res.data?.disclaimer || null,
-        });
-      } catch (error) {
-        console.error("Failed to load market data", error);
-      }
+    const handleIndices = (message) => {
+      const payload = message?.data;
+      setMarketData({
+        nifty: payload?.nifty || null,
+        sensex: payload?.sensex || null,
+        disclaimer: payload?.disclaimer || null,
+      });
     };
 
-    fetchMarketData();
-    intervalId = setInterval(fetchMarketData, 1000);
+    addMarketListener("indices", handleIndices);
+    setIndicesSubscription(true);
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      removeMarketListener("indices", handleIndices);
+      setIndicesSubscription(false);
     };
   }, []);
 
@@ -159,6 +159,7 @@ const PulseNavbar = () => {
         }&interval=${frame.interval}`,
       );
       const data = Array.isArray(res.data?.data) ? res.data.data : [];
+      console.log(data);
       setIndexCharts((prev) => ({ ...prev, [cacheKey]: data }));
     } catch (error) {
       console.error("Failed to load index chart", error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { IoIosAddCircle, IoIosRemoveCircle } from "react-icons/io";
 import { FaCartPlus, FaArrowRight } from "react-icons/fa";
@@ -7,6 +7,11 @@ import img46 from "../../assets/img46.png";
 import HeroSection from "./HeroSection.jsx";
 import toast from "react-hot-toast";
 import { useWatchlist } from "./Watchlist.jsx";
+import {
+  addMarketListener,
+  removeMarketListener,
+  setQuoteSymbols,
+} from "../../services/marketSocket";
 
 const STOCKS = [
   { name: "Reliance Industries Ltd", nse: "RELIANCE.NS", bse: "RELIANCE.BO" },
@@ -116,6 +121,7 @@ const DashboardPage = () => {
   const { watchlist, setWatchlist } = useWatchlist();
   const [stocks, setStocks] = useState(STOCKS);
   const [selectedStock, setSelectedStock] = useState(null);
+  const selectedStockRef = useRef(null);
   const [stockMeta, setStockMeta] = useState(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [cachedLogoUrl, setCachedLogoUrl] = useState(null);
@@ -373,45 +379,41 @@ const DashboardPage = () => {
   }, [query, filteredStocks.length, isWatchlist]);
 
   useEffect(() => {
-    let intervalId;
-
-    const fetchQuotes = async () => {
-      if (!selectedStock) return;
-      const symbols = [selectedStock.nse, selectedStock.bse].filter(Boolean);
-      if (symbols.length === 0) return;
-      setQuoteData((prev) => ({ ...prev, loading: true, error: "" }));
-      try {
-        const response = await axios.get("/api/market/quotes", {
-          params: {
-            symbols: symbols.join(","),
-          },
-        });
-
-        const data = response.data?.data || {};
-        setQuoteData({
-          nse: selectedStock.nse ? data[selectedStock.nse] || null : null,
-          bse: selectedStock.bse ? data[selectedStock.bse] || null : null,
-          loading: false,
-          error: "",
-        });
-      } catch (error) {
-        setQuoteData((prev) => ({
-          ...prev,
-          loading: false,
-          error: "Unable to load quotes right now.",
-        }));
-      }
-    };
-
-    if (selectedStock) {
-      fetchQuotes();
-      intervalId = setInterval(fetchQuotes, 1000);
+    selectedStockRef.current = selectedStock;
+    if (!selectedStock) {
+      setQuoteSymbols([]);
+      return;
     }
 
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
+    const symbols = [selectedStock.nse, selectedStock.bse].filter(Boolean);
+    if (symbols.length === 0) {
+      setQuoteSymbols([]);
+      setQuoteData({ nse: null, bse: null, loading: false, error: "" });
+      return;
+    }
+
+    setQuoteData((prev) => ({ ...prev, loading: true, error: "" }));
+    setQuoteSymbols(symbols);
   }, [selectedStock]);
+
+  useEffect(() => {
+    const handleQuotes = (message) => {
+      const activeStock = selectedStockRef.current;
+      if (!activeStock) return;
+      const data = message?.data?.data || {};
+      setQuoteData({
+        nse: activeStock.nse ? data[activeStock.nse] || null : null,
+        bse: activeStock.bse ? data[activeStock.bse] || null : null,
+        loading: false,
+        error: "",
+      });
+    };
+
+    addMarketListener("quotes", handleQuotes);
+    return () => {
+      removeMarketListener("quotes", handleQuotes);
+    };
+  }, []);
 
   const closeModal = () => {
     setSelectedStock(null);

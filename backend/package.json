@@ -26,6 +26,7 @@
     "pdfkit": "^0.17.2",
     "serpapi": "^2.2.1",
     "streamifier": "^0.1.1",
+    "ws": "^8.18.3",
     "yahoo-finance2": "^3.11.2"
   },
   "devDependencies": {
