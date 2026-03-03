@@ -4,6 +4,7 @@ import { getChartData } from "../services/yahoo.services.js";
 
 const OPEN_STATE = 1;
 const TICK_INTERVAL_MS = 1000;
+const CHART_INTERVAL_MS = 5000;
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -12,6 +13,7 @@ const yahooFinance = new YahooFinance({
 const createClientState = () => ({
   indices: false,
   symbols: new Set(),
+  charts: new Map(),
 });
 
 const sanitizeSymbols = (symbols) =>
@@ -23,11 +25,20 @@ export const startMarketSocket = (server) => {
   const wss = new WebSocketServer({ server, path: "/ws/market" });
   const clients = new Map();
   let intervalId = null;
+  let chartIntervalId = null;
   let isTicking = false;
+  let isChartTicking = false;
 
   const hasAnySubscriptions = () => {
     for (const state of clients.values()) {
       if (state.indices || state.symbols.size > 0) return true;
+    }
+    return false;
+  };
+
+  const hasAnyChartSubscriptions = () => {
+    for (const state of clients.values()) {
+      if (state.charts.size > 0) return true;
     }
     return false;
   };
@@ -127,11 +138,110 @@ export const startMarketSocket = (server) => {
     }, TICK_INTERVAL_MS);
   };
 
+  const ensureChartInterval = () => {
+    if (chartIntervalId || !hasAnyChartSubscriptions()) return;
+    chartIntervalId = setInterval(async () => {
+      if (isChartTicking) return;
+      if (!hasAnyChartSubscriptions()) return;
+      isChartTicking = true;
+      try {
+        const entries = [...clients.entries()];
+        const chartRequests = new Map();
+        entries.forEach(([, state]) => {
+          if (state.charts.size === 0) return;
+          state.charts.forEach((chart) => {
+            const { symbol, range, interval } = chart;
+            const key = `${symbol}|${range}|${interval}`;
+            chartRequests.set(key, { symbol, range, interval });
+          });
+        });
+
+        const chartResults = await Promise.all(
+          [...chartRequests.entries()].map(async ([key, payload]) => {
+            const result = await getChartData(
+              payload.symbol,
+              payload.range,
+              payload.interval,
+            );
+            return [key, result];
+          }),
+        );
+        const chartMap = new Map(chartResults);
+
+        entries.forEach(([ws, state]) => {
+          if (ws.readyState !== OPEN_STATE) return;
+          if (state.charts.size === 0) return;
+          state.charts.forEach((chart) => {
+            const { key: subscriptionKey, symbol, range, interval } = chart;
+            const chartKey = `${symbol}|${range}|${interval}`;
+            const result = chartMap.get(chartKey);
+            if (!result) return;
+            ws.send(
+              JSON.stringify({
+                type: "chart_update",
+                key: subscriptionKey,
+                symbol,
+                range,
+                interval,
+                data: result?.data || [],
+                meta: result?.meta || null,
+              }),
+            );
+          });
+        });
+      } catch (error) {
+        console.error("Chart socket tick failed:", error?.message || error);
+      } finally {
+        isChartTicking = false;
+      }
+    }, CHART_INTERVAL_MS);
+  };
+
   const stopIntervalIfIdle = () => {
     if (!intervalId) return;
     if (hasAnySubscriptions()) return;
     clearInterval(intervalId);
     intervalId = null;
+  };
+
+  const stopChartIntervalIfIdle = () => {
+    if (!chartIntervalId) return;
+    if (hasAnyChartSubscriptions()) return;
+    clearInterval(chartIntervalId);
+    chartIntervalId = null;
+  };
+
+  const sendChartSnapshot = (ws, chart) => {
+    if (!chart) return;
+    const { key: subscriptionKey, symbol, range, interval } = chart;
+    getChartData(symbol, range, interval)
+      .then((result) => {
+        if (ws.readyState !== OPEN_STATE) return;
+        ws.send(
+          JSON.stringify({
+            type: "chart_update",
+            key: subscriptionKey,
+            symbol,
+            range,
+            interval,
+            data: result?.data || [],
+            meta: result?.meta || null,
+          }),
+        );
+      })
+      .catch((error) => {
+        if (ws.readyState !== OPEN_STATE) return;
+        ws.send(
+          JSON.stringify({
+            type: "chart_update",
+            key: subscriptionKey,
+            symbol,
+            range,
+            interval,
+            error: error?.message || "Failed to load chart",
+          }),
+        );
+      });
   };
 
   wss.on("connection", (ws) => {
@@ -166,6 +276,28 @@ export const startMarketSocket = (server) => {
           state.symbols.clear();
           stopIntervalIfIdle();
           break;
+        case "subscribe_chart": {
+          const subscriptionKey = String(message?.key || "").trim();
+          const symbol = String(message?.symbol || "").trim();
+          const range = String(message?.range || "1mo").trim();
+          const interval = String(message?.interval || "5m").trim();
+          if (!subscriptionKey || !symbol) return;
+          const nextChart = { key: subscriptionKey, symbol, range, interval };
+          state.charts.set(subscriptionKey, nextChart);
+          ensureChartInterval();
+          sendChartSnapshot(ws, nextChart);
+          break;
+        }
+        case "unsubscribe_chart": {
+          const subscriptionKey = String(message?.key || "").trim();
+          if (subscriptionKey) {
+            state.charts.delete(subscriptionKey);
+          } else {
+            state.charts.clear();
+          }
+          stopChartIntervalIfIdle();
+          break;
+        }
         case "chart_request": {
           const symbol = String(message?.symbol || "").trim();
           const range = String(message?.range || "1mo").trim();
@@ -204,6 +336,7 @@ export const startMarketSocket = (server) => {
     ws.on("close", () => {
       clients.delete(ws);
       stopIntervalIfIdle();
+      stopChartIntervalIfIdle();
     });
   });
 

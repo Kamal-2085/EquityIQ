@@ -10,6 +10,8 @@ import {
   addMarketListener,
   removeMarketListener,
   setIndicesSubscription,
+  subscribeChart,
+  unsubscribeChart,
 } from "../services/marketSocket";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -45,6 +47,7 @@ const PulseNavbar = () => {
   const fileInputRef = useRef(null);
   const niftyRef = useRef(null);
   const sensexRef = useRef(null);
+  const activeIndexChartKeyRef = useRef(null);
 
   useEffect(() => {
     const loadUser = () => {
@@ -147,27 +150,66 @@ const PulseNavbar = () => {
 
   const getIndexKey = (key, timeframe) => `${key}_${timeframe}`;
 
-  const loadIndexChart = async (key, symbol, timeframe) => {
-    const frame = INDEX_TIMEFRAMES[timeframe] || INDEX_TIMEFRAMES["1D"];
-    const cacheKey = getIndexKey(key, timeframe);
-    if (indexCharts[cacheKey] || indexChartLoading[cacheKey]) return;
-    setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: true }));
-    try {
-      const res = await api.get(
-        `/market/chart/${encodeURIComponent(symbol)}?range=${
-          frame.range
-        }&interval=${frame.interval}`,
-      );
-      const data = Array.isArray(res.data?.data) ? res.data.data : [];
-      console.log(data);
-      setIndexCharts((prev) => ({ ...prev, [cacheKey]: data }));
-    } catch (error) {
-      console.error("Failed to load index chart", error);
-      setIndexCharts((prev) => ({ ...prev, [cacheKey]: [] }));
-    } finally {
+  useEffect(() => {
+    const handleChartUpdate = (message) => {
+      const key = message?.key || "";
+      if (!key.startsWith("index_")) return;
+      const cacheKey = key.replace(/^index_/, "");
+      if (message?.error) {
+        setIndexCharts((prev) => ({ ...prev, [cacheKey]: [] }));
+        setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: false }));
+        return;
+      }
+      setIndexCharts((prev) => ({
+        ...prev,
+        [cacheKey]: Array.isArray(message?.data) ? message.data : [],
+      }));
       setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: false }));
+    };
+
+    addMarketListener("chart_update", handleChartUpdate);
+    return () => {
+      removeMarketListener("chart_update", handleChartUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hoveredIndex) {
+      if (activeIndexChartKeyRef.current) {
+        unsubscribeChart(activeIndexChartKeyRef.current);
+        activeIndexChartKeyRef.current = null;
+      }
+      return;
     }
-  };
+
+    const timeframe = indexTimeframe[hoveredIndex];
+    const frame = INDEX_TIMEFRAMES[timeframe] || INDEX_TIMEFRAMES["1D"];
+    const symbol = hoveredIndex === "nifty" ? "^NSEI" : "^BSESN";
+    const cacheKey = getIndexKey(hoveredIndex, timeframe);
+    const subscriptionKey = `index_${cacheKey}`;
+
+    if (
+      activeIndexChartKeyRef.current &&
+      activeIndexChartKeyRef.current !== subscriptionKey
+    ) {
+      unsubscribeChart(activeIndexChartKeyRef.current);
+    }
+    activeIndexChartKeyRef.current = subscriptionKey;
+
+    setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: true }));
+
+    subscribeChart({
+      key: subscriptionKey,
+      symbol,
+      range: frame.range,
+      interval: frame.interval,
+    });
+
+    return () => {
+      unsubscribeChart(subscriptionKey);
+      activeIndexChartKeyRef.current = null;
+    };
+  }, [hoveredIndex, indexTimeframe.nifty, indexTimeframe.sensex]);
 
   const { setAccessToken } = useAuth();
   const handleLogout = async () => {
@@ -290,8 +332,6 @@ const PulseNavbar = () => {
               onClick={() => {
                 const next = hoveredIndex === "nifty" ? null : "nifty";
                 setHoveredIndex(next);
-                if (next)
-                  loadIndexChart("nifty", "^NSEI", indexTimeframe.nifty);
               }}
             >
               <span className="font-medium text-gray-600">NIFTY 50</span>
@@ -323,7 +363,6 @@ const PulseNavbar = () => {
                             ...prev,
                             nifty: frame,
                           }));
-                          loadIndexChart("nifty", "^NSEI", frame);
                         }}
                         className={`rounded-full px-2 py-0.5 text-[10px] ${
                           indexTimeframe.nifty === frame
@@ -364,8 +403,6 @@ const PulseNavbar = () => {
               onClick={() => {
                 const next = hoveredIndex === "sensex" ? null : "sensex";
                 setHoveredIndex(next);
-                if (next)
-                  loadIndexChart("sensex", "^BSESN", indexTimeframe.sensex);
               }}
             >
               <span className="font-medium text-gray-600">SENSEX</span>
@@ -397,7 +434,6 @@ const PulseNavbar = () => {
                             ...prev,
                             sensex: frame,
                           }));
-                          loadIndexChart("sensex", "^BSESN", frame);
                         }}
                         className={`rounded-full px-2 py-0.5 text-[10px] ${
                           indexTimeframe.sensex === frame

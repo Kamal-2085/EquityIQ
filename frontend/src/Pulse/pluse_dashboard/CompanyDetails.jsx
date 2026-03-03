@@ -9,7 +9,12 @@ import { useWatchlist } from "./Watchlist.jsx";
 import toast from "react-hot-toast";
 import { IoMdAlarm } from "react-icons/io";
 import { FaCartPlus } from "react-icons/fa";
-import { requestChartData } from "../../services/marketSocket";
+import {
+  addMarketListener,
+  removeMarketListener,
+  subscribeChart,
+  unsubscribeChart,
+} from "../../services/marketSocket";
 const TIMEFRAMES = {
   "1D": { range: "1d", interval: "1m" },
   "1W": { range: "5d", interval: "5m" },
@@ -90,6 +95,7 @@ const CompanyDetails = () => {
   const { watchlist, setWatchlist } = useWatchlist();
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
+  const chartKeyRef = useRef("company_details");
 
   useEffect(() => {
     const baseSymbol = resolvedSymbol ? getBaseSymbol(resolvedSymbol) : "";
@@ -168,27 +174,38 @@ const CompanyDetails = () => {
     setIsLoading(true);
     setError("");
 
-    requestChartData({
+    subscribeChart({
+      key: chartKeyRef.current,
       symbol: resolvedSymbol,
       range,
       interval,
-    })
-      .then((message) => {
-        if (!isActive) return;
-        setChartData(Array.isArray(message?.data) ? message.data : []);
-        setIsLoading(false);
-      })
-      .catch(() => {
-        if (!isActive) return;
-        setChartData([]);
-        setError("Unable to load chart data.");
-        setIsLoading(false);
-      });
+    });
 
     return () => {
       isActive = false;
+      unsubscribeChart(chartKeyRef.current);
     };
   }, [resolvedSymbol, timeframe]);
+
+  useEffect(() => {
+    const handleChartUpdate = (message) => {
+      const key = message?.key || "";
+      if (key !== chartKeyRef.current) return;
+      if (message?.error) {
+        setChartData([]);
+        setError("Unable to load chart data.");
+        setIsLoading(false);
+        return;
+      }
+      setChartData(Array.isArray(message?.data) ? message.data : []);
+      setIsLoading(false);
+    };
+
+    addMarketListener("chart_update", handleChartUpdate);
+    return () => {
+      removeMarketListener("chart_update", handleChartUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (!resolvedSymbol) return;

@@ -1,5 +1,6 @@
 const listeners = new Map();
 const chartRequests = new Map();
+const chartSubscriptions = new Map();
 let socket = null;
 let reconnectTimer = null;
 let pendingMessages = [];
@@ -61,6 +62,15 @@ const resendSubscriptions = () => {
   if (quoteSymbols.length > 0) {
     sendMessage({ type: "subscribe_quotes", symbols: quoteSymbols });
   }
+  chartSubscriptions.forEach((subscription) => {
+    sendMessage({
+      type: "subscribe_chart",
+      key: subscription.key,
+      symbol: subscription.symbol,
+      range: subscription.range,
+      interval: subscription.interval,
+    });
+  });
 };
 
 const scheduleReconnect = () => {
@@ -161,4 +171,25 @@ export const requestChartData = ({ symbol, range, interval }) => {
       interval,
     });
   });
+};
+
+export const subscribeChart = ({ key, symbol, range, interval }) => {
+  if (!key || !symbol) return;
+  const subscription = { key, symbol, range, interval };
+  chartSubscriptions.set(key, subscription);
+  connect();
+  sendMessage({
+    type: "subscribe_chart",
+    key,
+    symbol,
+    range,
+    interval,
+  });
+};
+
+export const unsubscribeChart = (key) => {
+  if (!key) return;
+  chartSubscriptions.delete(key);
+  connect();
+  sendMessage({ type: "unsubscribe_chart", key });
 };
