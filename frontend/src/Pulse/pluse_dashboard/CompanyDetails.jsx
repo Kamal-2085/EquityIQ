@@ -4,6 +4,7 @@ import StockChart from "../../components/StockChart.jsx";
 import nseLogo from "../../assets/img46.png";
 import bseLogo from "../../assets/img54.jpg";
 import OrderPanel from "./OrderPanel.jsx";
+import EquityAIChat from "../../components/EquityAIChat.jsx";
 import AlertPanel from "./AlertPanel.jsx";
 import { useWatchlist } from "./Watchlist.jsx";
 import toast from "react-hot-toast";
@@ -88,6 +89,7 @@ const CompanyDetails = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAlertPanel, setShowAlertPanel] = useState(false);
+  const [showAiChat, setShowAiChat] = useState(false);
   const [companyProfile, setCompanyProfile] = useState({});
   const [priceData, setPriceData] = useState({});
   const [fundamentals, setFundamentals] = useState({});
@@ -496,12 +498,18 @@ const CompanyDetails = () => {
           </div>
           {showAlertPanel ? (
             <AlertPanel onClose={() => setShowAlertPanel(false)} />
+          ) : showAiChat ? (
+            <EquityAIChat
+              companyName={decodedName || "Company"}
+              onClose={() => setShowAiChat(false)}
+            />
           ) : (
             <OrderPanel
               companyName={decodedName || "Company"}
               companyLogoUrl={logoSrc && !logoFailed ? logoSrc : ""}
               exchangeLabel={activeExchange}
               marketPrice={stockPrice}
+              onAnalyze={() => setShowAiChat(true)}
             />
           )}
         </div>

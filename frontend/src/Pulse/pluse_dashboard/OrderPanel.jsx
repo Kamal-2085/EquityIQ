@@ -4,6 +4,7 @@ const OrderPanel = ({
   companyLogoUrl,
   exchangeLabel,
   marketPrice,
+  onAnalyze,
 }) => {
   const [side, setSide] = useState("BUY");
   const [product, setProduct] = useState("DELIVERY");
@@ -205,13 +206,15 @@ const OrderPanel = ({
         </button>
       </div>
 
-      <div className="flex items-center justify-center border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
+      <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
         <button
           type="button"
+          onClick={() => onAnalyze && onAnalyze()}
           className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-700 cursor-pointer"
         >
           Analyze With EquityAI
         </button>
+        <div className="text-xs text-gray-400">EquityAI</div>
       </div>
     </aside>
   );

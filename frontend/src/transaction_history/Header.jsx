@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { FiDownload } from "react-icons/fi";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import logo from "../../public/img3.png";
+const logo = "/img3.png";
 
 const Header = () => {
   const [balance, setBalance] = useState(0);
