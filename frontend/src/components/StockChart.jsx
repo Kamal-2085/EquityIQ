@@ -1,10 +1,42 @@
 import { useEffect, useRef } from "react";
 import { AreaSeries, createChart } from "lightweight-charts";
 
-const StockChart = ({ data, height = 320, minHeight = 320 }) => {
+const StockChart = ({
+  data,
+  height = 320,
+  minHeight = 320,
+  trend,
+  timeMode,
+}) => {
   const containerRef = useRef();
   const chartRef = useRef(null);
   const seriesRef = useRef(null);
+
+  const formatTimeLabel = (unixTime) => {
+    const date = new Date(unixTime * 1000);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  };
+
+  const resolveTrendOverride = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return null;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "down" || normalized === "negative") return "down";
+      if (normalized === "up" || normalized === "positive") return "up";
+      return null;
+    }
+    if (typeof value === "number") {
+      if (value < 0) return "down";
+      if (value > 0) return "up";
+    }
+    return null;
+  };
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -25,6 +57,8 @@ const StockChart = ({ data, height = 320, minHeight = 320 }) => {
       },
       timeScale: {
         borderVisible: false,
+        tickMarkFormatter:
+          timeMode === "intraday" ? (time) => formatTimeLabel(time) : undefined,
       },
     });
 
@@ -61,9 +95,27 @@ const StockChart = ({ data, height = 320, minHeight = 320 }) => {
   }, [height]);
 
   useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.applyOptions({
+      timeScale: {
+        tickMarkFormatter:
+          timeMode === "intraday" ? (time) => formatTimeLabel(time) : undefined,
+      },
+    });
+  }, [timeMode]);
+
+  useEffect(() => {
     if (!seriesRef.current) return;
     const safeData = Array.isArray(data) ? data : [];
-    if (safeData.length > 1) {
+    const trendOverride = resolveTrendOverride(trend);
+    if (trendOverride) {
+      const isDown = trendOverride === "down";
+      seriesRef.current.applyOptions({
+        lineColor: isDown ? "#dc2626" : "#16a34a",
+        topColor: isDown ? "rgba(220,38,38,0.35)" : "rgba(22,163,74,0.4)",
+        bottomColor: isDown ? "rgba(220,38,38,0.05)" : "rgba(22,163,74,0.05)",
+      });
+    } else if (safeData.length > 1) {
       const first = safeData[0]?.value;
       const last = safeData[safeData.length - 1]?.value;
       if (
@@ -82,7 +134,7 @@ const StockChart = ({ data, height = 320, minHeight = 320 }) => {
     }
     seriesRef.current.setData(safeData);
     chartRef.current?.timeScale().fitContent();
-  }, [data]);
+  }, [data, trend]);
 
   return <div ref={containerRef} className="w-full" style={{ minHeight }} />;
 };

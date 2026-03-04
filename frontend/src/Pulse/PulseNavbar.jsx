@@ -38,6 +38,10 @@ const PulseNavbar = () => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [indexCharts, setIndexCharts] = useState({});
   const [indexChartLoading, setIndexChartLoading] = useState({});
+  const [indexLiveSeries, setIndexLiveSeries] = useState({
+    nifty: [],
+    sensex: [],
+  });
   const [indexTimeframe, setIndexTimeframe] = useState({
     nifty: "1D",
     sensex: "1D",
@@ -87,6 +91,28 @@ const PulseNavbar = () => {
         sensex: payload?.sensex || null,
         disclaimer: payload?.disclaimer || null,
       });
+
+      const niftyPrice = toNumeric(payload?.nifty?.price);
+      const sensexPrice = toNumeric(payload?.sensex?.price);
+      const niftyPoint =
+        niftyPrice !== null
+          ? {
+              time: toUnixSeconds(payload?.nifty?.time),
+              value: niftyPrice,
+            }
+          : null;
+      const sensexPoint =
+        sensexPrice !== null
+          ? {
+              time: toUnixSeconds(payload?.sensex?.time),
+              value: sensexPrice,
+            }
+          : null;
+
+      setIndexLiveSeries((prev) => ({
+        nifty: pushLivePoint(prev.nifty, niftyPoint),
+        sensex: pushLivePoint(prev.sensex, sensexPoint),
+      }));
     };
 
     addMarketListener("indices", handleIndices);
@@ -141,14 +167,105 @@ const PulseNavbar = () => {
     return `${value.toFixed(2)}%`;
   };
 
+  const toNumeric = (value) =>
+    typeof value === "number" && !Number.isNaN(value) ? value : null;
+
+  const toUnixSeconds = (timeValue) => {
+    if (typeof timeValue === "number" && !Number.isNaN(timeValue)) {
+      return timeValue > 1e12
+        ? Math.floor(timeValue / 1000)
+        : Math.floor(timeValue);
+    }
+    if (typeof timeValue === "string") {
+      const parsed = Date.parse(timeValue);
+      if (!Number.isNaN(parsed)) return Math.floor(parsed / 1000);
+    }
+    return Math.floor(Date.now() / 1000);
+  };
+
+  const toDateKey = (unixSeconds) => {
+    const date = new Date(unixSeconds * 1000);
+    return `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
+  };
+
+  const getMarketOpenSeconds = (unixSeconds) => {
+    const date = new Date(unixSeconds * 1000);
+    const open = new Date(date);
+    open.setHours(9, 15, 0, 0);
+    return Math.floor(open.getTime() / 1000);
+  };
+
+  const formatDateLabel = (unixSeconds) => {
+    const date = unixSeconds ? new Date(unixSeconds * 1000) : new Date();
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const pushLivePoint = (series, point, maxPoints = 25000) => {
+    if (!point) return series;
+    const next = Array.isArray(series) ? [...series] : [];
+    const last = next[next.length - 1];
+    if (last && toDateKey(last.time) !== toDateKey(point.time)) {
+      const openSeconds = getMarketOpenSeconds(point.time);
+      return openSeconds < point.time
+        ? [{ time: openSeconds, value: point.value }, point]
+        : [point];
+    }
+    if (next.length === 0) {
+      const openSeconds = getMarketOpenSeconds(point.time);
+      if (openSeconds < point.time) {
+        next.push({ time: openSeconds, value: point.value });
+      }
+    }
+    const updatedLast = next[next.length - 1];
+    if (updatedLast && updatedLast.time === point.time) {
+      next[next.length - 1] = point;
+      return next;
+    }
+    next.push(point);
+    if (next.length > maxPoints) return next.slice(-maxPoints);
+    return next;
+  };
+
   const nifty = marketData.nifty;
   const sensex = marketData.sensex;
   const niftyChange = nifty?.change ?? null;
   const sensexChange = sensex?.change ?? null;
   const changeClass = (value) =>
     value !== null && value >= 0 ? "text-green-600" : "text-red-500";
+  const niftyTrend = indexTimeframe.nifty === "1D" ? niftyChange : null;
+  const sensexTrend = indexTimeframe.sensex === "1D" ? sensexChange : null;
 
   const getIndexKey = (key, timeframe) => `${key}_${timeframe}`;
+
+  const niftyKey = getIndexKey("nifty", indexTimeframe.nifty);
+  const sensexKey = getIndexKey("sensex", indexTimeframe.sensex);
+  const niftyIsLive = indexTimeframe.nifty === "1D";
+  const sensexIsLive = indexTimeframe.sensex === "1D";
+  const niftyChartData = niftyIsLive
+    ? indexLiveSeries.nifty
+    : indexCharts[niftyKey] || [];
+  const sensexChartData = sensexIsLive
+    ? indexLiveSeries.sensex
+    : indexCharts[sensexKey] || [];
+  const niftyLoading =
+    !niftyIsLive &&
+    indexChartLoading[niftyKey] &&
+    (!indexCharts[niftyKey] || indexCharts[niftyKey].length === 0);
+  const sensexLoading =
+    !sensexIsLive &&
+    indexChartLoading[sensexKey] &&
+    (!indexCharts[sensexKey] || indexCharts[sensexKey].length === 0);
+  const niftyLiveEmpty = niftyIsLive && niftyChartData.length === 0;
+  const sensexLiveEmpty = sensexIsLive && sensexChartData.length === 0;
+  const niftyHeaderLabel = niftyIsLive
+    ? formatDateLabel(niftyChartData[niftyChartData.length - 1]?.time)
+    : indexTimeframe.nifty;
+  const sensexHeaderLabel = sensexIsLive
+    ? formatDateLabel(sensexChartData[sensexChartData.length - 1]?.time)
+    : indexTimeframe.sensex;
 
   useEffect(() => {
     const handleChartUpdate = (message) => {
@@ -183,6 +300,13 @@ const PulseNavbar = () => {
     }
 
     const timeframe = indexTimeframe[hoveredIndex];
+    if (timeframe === "1D") {
+      if (activeIndexChartKeyRef.current) {
+        unsubscribeChart(activeIndexChartKeyRef.current);
+        activeIndexChartKeyRef.current = null;
+      }
+      return;
+    }
     const frame = INDEX_TIMEFRAMES[timeframe] || INDEX_TIMEFRAMES["1D"];
     const symbol = hoveredIndex === "nifty" ? "^NSEI" : "^BSESN";
     const cacheKey = getIndexKey(hoveredIndex, timeframe);
@@ -351,7 +475,7 @@ const PulseNavbar = () => {
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="mb-2 text-[11px] text-gray-500">
-                    NIFTY 50 · {indexTimeframe.nifty}
+                    NIFTY 50 · {niftyHeaderLabel}
                   </div>
                   <div className="mb-2 flex flex-wrap gap-1">
                     {Object.keys(INDEX_TIMEFRAMES).map((frame) => (
@@ -374,22 +498,17 @@ const PulseNavbar = () => {
                       </button>
                     ))}
                   </div>
-                  {indexChartLoading[
-                    getIndexKey("nifty", indexTimeframe.nifty)
-                  ] &&
-                  (!indexCharts[getIndexKey("nifty", indexTimeframe.nifty)] ||
-                    indexCharts[getIndexKey("nifty", indexTimeframe.nifty)]
-                      .length === 0) ? (
+                  {niftyLoading || niftyLiveEmpty ? (
                     <div className="text-xs text-gray-400">
-                      Loading chart...
+                      {niftyLiveEmpty
+                        ? "Waiting for live ticks..."
+                        : "Loading chart..."}
                     </div>
                   ) : (
                     <StockChart
-                      data={
-                        indexCharts[
-                          getIndexKey("nifty", indexTimeframe.nifty)
-                        ] || []
-                      }
+                      data={niftyChartData}
+                      trend={niftyTrend}
+                      timeMode={niftyIsLive ? "intraday" : undefined}
                       height={140}
                       minHeight={140}
                     />
@@ -422,7 +541,7 @@ const PulseNavbar = () => {
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div className="mb-2 text-[11px] text-gray-500">
-                    SENSEX · {indexTimeframe.sensex}
+                    SENSEX · {sensexHeaderLabel}
                   </div>
                   <div className="mb-2 flex flex-wrap gap-1">
                     {Object.keys(INDEX_TIMEFRAMES).map((frame) => (
@@ -445,22 +564,17 @@ const PulseNavbar = () => {
                       </button>
                     ))}
                   </div>
-                  {indexChartLoading[
-                    getIndexKey("sensex", indexTimeframe.sensex)
-                  ] &&
-                  (!indexCharts[getIndexKey("sensex", indexTimeframe.sensex)] ||
-                    indexCharts[getIndexKey("sensex", indexTimeframe.sensex)]
-                      .length === 0) ? (
+                  {sensexLoading || sensexLiveEmpty ? (
                     <div className="text-xs text-gray-400">
-                      Loading chart...
+                      {sensexLiveEmpty
+                        ? "Waiting for live ticks..."
+                        : "Loading chart..."}
                     </div>
                   ) : (
                     <StockChart
-                      data={
-                        indexCharts[
-                          getIndexKey("sensex", indexTimeframe.sensex)
-                        ] || []
-                      }
+                      data={sensexChartData}
+                      trend={sensexTrend}
+                      timeMode={sensexIsLive ? "intraday" : undefined}
                       height={140}
                       minHeight={140}
                     />

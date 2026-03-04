@@ -299,6 +299,11 @@ const CompanyDetails = () => {
   }, [exchangeOpen]);
 
   const isIntradayTimeframe = timeframe === "1D" || timeframe === "1W";
+  const dayChange =
+    typeof stockPrice === "number" &&
+    typeof priceData?.previousClose === "number"
+      ? stockPrice - priceData.previousClose
+      : null;
   const getExchangeLogo = (label) => {
     const key = String(label || "").toUpperCase();
     if (key === "NSE") return nseLogo;
@@ -482,7 +487,10 @@ const CompanyDetails = () => {
                   {isIntradayTimeframe ? "No intraday data." : "No chart data."}
                 </div>
               ) : (
-                <StockChart data={chartData} />
+                <StockChart
+                  data={chartData}
+                  trend={timeframe === "1D" ? dayChange : null}
+                />
               )}
             </div>
           </div>
