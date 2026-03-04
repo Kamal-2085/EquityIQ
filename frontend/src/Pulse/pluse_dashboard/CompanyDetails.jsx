@@ -201,6 +201,32 @@ const CompanyDetails = () => {
     return next;
   };
 
+  const formatNumber = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return "--";
+    }
+    return Number(value).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  const formatSignedNumber = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return "--";
+    }
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${formatNumber(value)}`;
+  };
+
+  const formatSignedPercent = (value) => {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return "--";
+    }
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value.toFixed(2)}%`;
+  };
+
   useEffect(() => {
     if (!resolvedSymbol) return;
 
@@ -255,7 +281,7 @@ const CompanyDetails = () => {
   }, [resolvedSymbol, timeframe]);
 
   useEffect(() => {
-    if (!resolvedSymbol || timeframe !== "1D") return;
+    if (!resolvedSymbol) return;
 
     setQuoteSymbols([resolvedSymbol]);
 
@@ -265,6 +291,11 @@ const CompanyDetails = () => {
       if (!quote) return;
       const price = quote?.regularMarketPrice ?? quote?.price;
       if (typeof price !== "number") return;
+
+      setStockPrice(price);
+
+      if (timeframe !== "1D") return;
+
       const time = toUnixSeconds(
         quote?.regularMarketTime ?? quote?.regularMarketTimeMs ?? Date.now(),
       );
@@ -382,6 +413,25 @@ const CompanyDetails = () => {
   const openSeconds = getMarketOpenSeconds(nowSeconds);
   const intradayRange = { from: openSeconds, to: nowSeconds };
   const isLiveIntraday = timeframe === "1D";
+  const lastChartValue = Array.isArray(chartData)
+    ? chartData[chartData.length - 1]?.value
+    : null;
+  const displayPrice =
+    typeof stockPrice === "number" ? stockPrice : lastChartValue;
+  const previousClose =
+    typeof priceData?.previousClose === "number"
+      ? priceData.previousClose
+      : null;
+  const priceChange =
+    typeof displayPrice === "number" && typeof previousClose === "number"
+      ? displayPrice - previousClose
+      : null;
+  const priceChangePercent =
+    typeof priceChange === "number" && typeof previousClose === "number"
+      ? (priceChange / previousClose) * 100
+      : null;
+  const changeClass = (value) =>
+    value !== null && value >= 0 ? "text-green-600" : "text-red-500";
   const dayChange =
     typeof stockPrice === "number" &&
     typeof priceData?.previousClose === "number"
@@ -496,67 +546,91 @@ const CompanyDetails = () => {
                 ))}
               </div>
 
-              <div className="relative flex items-center gap-2">
-                <span className="text-xs font-medium text-gray-500">
-                  Exchange
-                </span>
-                <button
-                  ref={exchangeButtonRef}
-                  type="button"
-                  onClick={() => setExchangeOpen((prev) => !prev)}
-                  className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
-                >
-                  {getExchangeLogo(activeExchange) ? (
-                    <img
-                      src={getExchangeLogo(activeExchange)}
-                      alt={activeExchange}
-                      className="h-4 w-4"
-                    />
-                  ) : null}
-                  <span>{activeExchange}</span>
-                  <span className="text-gray-400">▾</span>
-                </button>
-                {exchangeOpen ? (
-                  <div
-                    ref={exchangeMenuRef}
-                    className="absolute right-0 top-8 z-20 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-                  >
-                    {(symbolOptions.length === 0
-                      ? [{ label: activeExchange, value: resolvedSymbol || "" }]
-                      : symbolOptions
-                    ).map((option) => (
-                      <button
-                        key={option.value || option.label}
-                        type="button"
-                        onClick={() => {
-                          const next = option.value;
-                          const label = option.label || "NSE";
-                          setActiveExchange(label);
-                          setResolvedSymbol(next);
-                          setExchangeOpen(false);
-                          const params = new URLSearchParams(location.search);
-                          params.set("symbol", next);
-                          navigate(
-                            `${location.pathname}?${params.toString()}`,
-                            {
-                              replace: true,
-                            },
-                          );
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+              <div className="flex flex-wrap items-center justify-end gap-4">
+                {typeof displayPrice === "number" ? (
+                  <div className="flex items-baseline gap-2 text-sm text-right">
+                    <span className="text-lg font-semibold text-gray-900">
+                      {formatNumber(displayPrice)}
+                    </span>
+                    {typeof priceChange === "number" &&
+                    typeof priceChangePercent === "number" ? (
+                      <span
+                        className={`font-semibold ${changeClass(priceChange)}`}
                       >
-                        {getExchangeLogo(option.label) ? (
-                          <img
-                            src={getExchangeLogo(option.label)}
-                            alt={option.label}
-                            className="h-4 w-4"
-                          />
-                        ) : null}
-                        <span>{option.label}</span>
-                      </button>
-                    ))}
+                        {formatSignedNumber(priceChange)} (
+                        {formatSignedPercent(priceChangePercent)})
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
+
+                <div className="relative flex items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500">
+                    Exchange
+                  </span>
+                  <button
+                    ref={exchangeButtonRef}
+                    type="button"
+                    onClick={() => setExchangeOpen((prev) => !prev)}
+                    className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                  >
+                    {getExchangeLogo(activeExchange) ? (
+                      <img
+                        src={getExchangeLogo(activeExchange)}
+                        alt={activeExchange}
+                        className="h-4 w-4"
+                      />
+                    ) : null}
+                    <span>{activeExchange}</span>
+                    <span className="text-gray-400">▾</span>
+                  </button>
+                  {exchangeOpen ? (
+                    <div
+                      ref={exchangeMenuRef}
+                      className="absolute right-0 top-8 z-20 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                    >
+                      {(symbolOptions.length === 0
+                        ? [
+                            {
+                              label: activeExchange,
+                              value: resolvedSymbol || "",
+                            },
+                          ]
+                        : symbolOptions
+                      ).map((option) => (
+                        <button
+                          key={option.value || option.label}
+                          type="button"
+                          onClick={() => {
+                            const next = option.value;
+                            const label = option.label || "NSE";
+                            setActiveExchange(label);
+                            setResolvedSymbol(next);
+                            setExchangeOpen(false);
+                            const params = new URLSearchParams(location.search);
+                            params.set("symbol", next);
+                            navigate(
+                              `${location.pathname}?${params.toString()}`,
+                              {
+                                replace: true,
+                              },
+                            );
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                        >
+                          {getExchangeLogo(option.label) ? (
+                            <img
+                              src={getExchangeLogo(option.label)}
+                              alt={option.label}
+                              className="h-4 w-4"
+                            />
+                          ) : null}
+                          <span>{option.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 
