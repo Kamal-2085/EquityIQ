@@ -1,10 +1,48 @@
 import { WebSocketServer } from "ws";
 import YahooFinance from "yahoo-finance2";
 import { getChartData } from "../services/yahoo.services.js";
+import { createYahooStreamer } from "../services/yahooStreamer.js";
 
 const OPEN_STATE = 1;
 const TICK_INTERVAL_MS = 1000;
 const CHART_INTERVAL_MS = 5000;
+const LIVE_INTERVALS = new Set(["1m", "5m"]);
+
+const intervalToSeconds = (interval) => {
+  if (interval === "1m") return 60;
+  if (interval === "5m") return 300;
+  return null;
+};
+
+const isLiveChart = (range, interval) =>
+  range === "1d" && LIVE_INTERVALS.has(interval);
+
+const toUnixSeconds = (timeValue) => {
+  if (typeof timeValue !== "number" || Number.isNaN(timeValue)) {
+    return Math.floor(Date.now() / 1000);
+  }
+  return timeValue > 1e12
+    ? Math.floor(timeValue / 1000)
+    : Math.floor(timeValue);
+};
+
+const resolveTickPrice = (tick) =>
+  tick?.price ??
+  tick?.regularMarketPrice ??
+  tick?.marketPrice ??
+  tick?.lastPrice ??
+  null;
+
+const normalizeSymbol = (symbol) =>
+  String(symbol || "")
+    .trim()
+    .replace(/^\^/, "")
+    .toUpperCase();
+
+const toDateKey = (unixSeconds) => {
+  const date = new Date(unixSeconds * 1000);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
 
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
@@ -24,6 +62,10 @@ const sanitizeSymbols = (symbols) =>
 export const startMarketSocket = (server) => {
   const wss = new WebSocketServer({ server, path: "/ws/market" });
   const clients = new Map();
+  const streamer = createYahooStreamer();
+  const liveCandleState = new Map();
+  const liveSeriesStore = new Map();
+  let liveSymbols = new Set();
   let intervalId = null;
   let chartIntervalId = null;
   let isTicking = false;
@@ -41,6 +83,161 @@ export const startMarketSocket = (server) => {
       if (state.charts.size > 0) return true;
     }
     return false;
+  };
+
+  const hasAnyNonLiveChartSubscriptions = () => {
+    for (const state of clients.values()) {
+      if (state.charts.size === 0) continue;
+      for (const chart of state.charts.values()) {
+        if (!isLiveChart(chart.range, chart.interval)) return true;
+      }
+    }
+    return false;
+  };
+
+  const rebuildStreamerSubscriptions = () => {
+    const symbols = new Set();
+    clients.forEach((state) => {
+      state.charts.forEach((chart) => {
+        if (isLiveChart(chart.range, chart.interval)) {
+          symbols.add(chart.symbol);
+        }
+      });
+    });
+    liveSymbols = new Set([...symbols].map(normalizeSymbol));
+    streamer.setSymbols([...symbols]);
+  };
+
+  const symbolsMatch = (chartSymbol, incomingSymbol) =>
+    normalizeSymbol(chartSymbol) === normalizeSymbol(incomingSymbol);
+
+  const emitLiveChartUpdate = (symbol, interval, point) => {
+    const entries = [...clients.entries()];
+    entries.forEach(([ws, state]) => {
+      if (ws.readyState !== OPEN_STATE) return;
+      state.charts.forEach((chart) => {
+        if (
+          symbolsMatch(chart.symbol, symbol) &&
+          chart.interval === interval &&
+          isLiveChart(chart.range, chart.interval)
+        ) {
+          ws.send(
+            JSON.stringify({
+              type: "chart_update",
+              key: chart.key,
+              symbol: chart.symbol,
+              range: chart.range,
+              interval: chart.interval,
+              data: [point],
+              meta: {
+                mode: "update",
+                source: "yahoo_streamer",
+              },
+            }),
+          );
+        }
+      });
+    });
+  };
+
+  const getMarketOpenSeconds = (unixSeconds) => {
+    const date = new Date(unixSeconds * 1000);
+    const open = new Date(date);
+    open.setHours(9, 15, 0, 0);
+    return Math.floor(open.getTime() / 1000);
+  };
+
+  const updateLiveSeriesStore = (symbol, interval, point) => {
+    const normalized = normalizeSymbol(symbol);
+    const key = `${normalized}|${interval}`;
+    const next = liveSeriesStore.get(key) || [];
+    const last = next[next.length - 1];
+    if (last && toDateKey(last.time) !== toDateKey(point.time)) {
+      liveSeriesStore.set(key, [point]);
+      return;
+    }
+    if (last && last.time === point.time) {
+      next[next.length - 1] = point;
+      liveSeriesStore.set(key, next);
+      return;
+    }
+    next.push(point);
+    if (next.length > 2000) {
+      liveSeriesStore.set(key, next.slice(-2000));
+      return;
+    }
+    liveSeriesStore.set(key, next);
+  };
+
+  const buildLiveSnapshot = (symbol, interval) => {
+    const normalized = normalizeSymbol(symbol);
+    const key = `${normalized}|${interval}`;
+    const series = liveSeriesStore.get(key) || [];
+    if (series.length === 0) return [];
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const openSeconds = getMarketOpenSeconds(nowSeconds);
+    const filtered = series.filter(
+      (point) =>
+        point.time >= openSeconds &&
+        point.time <= nowSeconds &&
+        toDateKey(point.time) === toDateKey(nowSeconds),
+    );
+    if (filtered.length === 0) return [];
+    const first = filtered[0];
+    const snapshot = [
+      ...(first.time > openSeconds
+        ? [{ time: openSeconds, value: first.value }]
+        : []),
+      ...filtered,
+    ];
+    return snapshot;
+  };
+
+  streamer.onTick((tick) => {
+    const symbol = String(tick?.id || "").trim();
+    if (!symbol) return;
+    const price = resolveTickPrice(tick);
+    if (price === null || price === undefined || Number.isNaN(price)) return;
+    const timeSeconds = toUnixSeconds(
+      tick?.time ?? tick?.regularMarketTime ?? Date.now(),
+    );
+    const normalized = normalizeSymbol(symbol);
+    if (liveSymbols.size > 0 && !liveSymbols.has(normalized)) return;
+
+    LIVE_INTERVALS.forEach((interval) => {
+      const intervalSeconds = intervalToSeconds(interval);
+      if (!intervalSeconds) return;
+      const bucketTime =
+        Math.floor(timeSeconds / intervalSeconds) * intervalSeconds;
+      const key = `${normalized}|${interval}`;
+      const last = liveCandleState.get(key);
+      if (last && last.time === bucketTime && last.value === price) return;
+      const point = { time: bucketTime, value: price };
+      liveCandleState.set(key, point);
+      updateLiveSeriesStore(symbol, interval, point);
+      emitLiveChartUpdate(symbol, interval, point);
+    });
+  });
+
+  const updateLiveCandle = (symbol, price, timeValue) => {
+    const normalized = normalizeSymbol(symbol);
+    if (liveSymbols.size > 0 && !liveSymbols.has(normalized)) return;
+    if (price === null || price === undefined || Number.isNaN(price)) return;
+    const timeSeconds = toUnixSeconds(timeValue ?? Date.now());
+
+    LIVE_INTERVALS.forEach((interval) => {
+      const intervalSeconds = intervalToSeconds(interval);
+      if (!intervalSeconds) return;
+      const bucketTime =
+        Math.floor(timeSeconds / intervalSeconds) * intervalSeconds;
+      const key = `${normalized}|${interval}`;
+      const last = liveCandleState.get(key);
+      if (last && last.time === bucketTime && last.value === price) return;
+      const point = { time: bucketTime, value: price };
+      liveCandleState.set(key, point);
+      updateLiveSeriesStore(symbol, interval, point);
+      emitLiveChartUpdate(symbol, interval, point);
+    });
   };
 
   const ensureInterval = () => {
@@ -86,6 +283,17 @@ export const startMarketSocket = (server) => {
             source: "Yahoo Finance",
             disclaimer: "Delayed market data. For educational purposes only.",
           };
+
+          updateLiveCandle(
+            "^NSEI",
+            nifty?.regularMarketPrice ?? null,
+            nifty?.regularMarketTime ?? null,
+          );
+          updateLiveCandle(
+            "^BSESN",
+            sensex?.regularMarketPrice ?? null,
+            sensex?.regularMarketTime ?? null,
+          );
         }
 
         let quotesPayload = null;
@@ -139,10 +347,10 @@ export const startMarketSocket = (server) => {
   };
 
   const ensureChartInterval = () => {
-    if (chartIntervalId || !hasAnyChartSubscriptions()) return;
+    if (chartIntervalId || !hasAnyNonLiveChartSubscriptions()) return;
     chartIntervalId = setInterval(async () => {
       if (isChartTicking) return;
-      if (!hasAnyChartSubscriptions()) return;
+      if (!hasAnyNonLiveChartSubscriptions()) return;
       isChartTicking = true;
       try {
         const entries = [...clients.entries()];
@@ -151,6 +359,7 @@ export const startMarketSocket = (server) => {
           if (state.charts.size === 0) return;
           state.charts.forEach((chart) => {
             const { symbol, range, interval } = chart;
+            if (isLiveChart(range, interval)) return;
             const key = `${symbol}|${range}|${interval}`;
             chartRequests.set(key, { symbol, range, interval });
           });
@@ -173,6 +382,7 @@ export const startMarketSocket = (server) => {
           if (state.charts.size === 0) return;
           state.charts.forEach((chart) => {
             const { key: subscriptionKey, symbol, range, interval } = chart;
+            if (isLiveChart(range, interval)) return;
             const chartKey = `${symbol}|${range}|${interval}`;
             const result = chartMap.get(chartKey);
             if (!result) return;
@@ -206,7 +416,7 @@ export const startMarketSocket = (server) => {
 
   const stopChartIntervalIfIdle = () => {
     if (!chartIntervalId) return;
-    if (hasAnyChartSubscriptions()) return;
+    if (hasAnyNonLiveChartSubscriptions()) return;
     clearInterval(chartIntervalId);
     chartIntervalId = null;
   };
@@ -225,9 +435,33 @@ export const startMarketSocket = (server) => {
             range,
             interval,
             data: result?.data || [],
-            meta: result?.meta || null,
+            meta: {
+              ...(result?.meta || null),
+              mode: "snapshot",
+              source: "yahoo_chart",
+            },
           }),
         );
+
+        if (isLiveChart(range, interval)) {
+          const liveSnapshot = buildLiveSnapshot(symbol, interval);
+          if (liveSnapshot.length > 0) {
+            ws.send(
+              JSON.stringify({
+                type: "chart_update",
+                key: subscriptionKey,
+                symbol,
+                range,
+                interval,
+                data: liveSnapshot,
+                meta: {
+                  mode: "update",
+                  source: "live_cache",
+                },
+              }),
+            );
+          }
+        }
       })
       .catch((error) => {
         if (ws.readyState !== OPEN_STATE) return;
@@ -284,6 +518,7 @@ export const startMarketSocket = (server) => {
           if (!subscriptionKey || !symbol) return;
           const nextChart = { key: subscriptionKey, symbol, range, interval };
           state.charts.set(subscriptionKey, nextChart);
+          rebuildStreamerSubscriptions();
           ensureChartInterval();
           sendChartSnapshot(ws, nextChart);
           break;
@@ -295,6 +530,7 @@ export const startMarketSocket = (server) => {
           } else {
             state.charts.clear();
           }
+          rebuildStreamerSubscriptions();
           stopChartIntervalIfIdle();
           break;
         }
@@ -337,6 +573,7 @@ export const startMarketSocket = (server) => {
       clients.delete(ws);
       stopIntervalIfIdle();
       stopChartIntervalIfIdle();
+      rebuildStreamerSubscriptions();
     });
   });
 

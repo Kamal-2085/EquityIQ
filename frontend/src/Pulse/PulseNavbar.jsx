@@ -10,8 +10,6 @@ import {
   addMarketListener,
   removeMarketListener,
   setIndicesSubscription,
-  subscribeChart,
-  unsubscribeChart,
 } from "../services/marketSocket";
 import { useAuth } from "../auth/AuthProvider";
 
@@ -38,10 +36,6 @@ const PulseNavbar = () => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [indexCharts, setIndexCharts] = useState({});
   const [indexChartLoading, setIndexChartLoading] = useState({});
-  const [indexLiveSeries, setIndexLiveSeries] = useState({
-    nifty: [],
-    sensex: [],
-  });
   const [indexTimeframe, setIndexTimeframe] = useState({
     nifty: "1D",
     sensex: "1D",
@@ -51,7 +45,6 @@ const PulseNavbar = () => {
   const fileInputRef = useRef(null);
   const niftyRef = useRef(null);
   const sensexRef = useRef(null);
-  const activeIndexChartKeyRef = useRef(null);
 
   useEffect(() => {
     const loadUser = () => {
@@ -81,7 +74,7 @@ const PulseNavbar = () => {
     window.addEventListener("equityiq_user_updated", handleUserUpdate);
     return () =>
       window.removeEventListener("equityiq_user_updated", handleUserUpdate);
-  }, []);
+  }, [indexTimeframe.nifty, indexTimeframe.sensex]);
 
   useEffect(() => {
     const handleIndices = (message) => {
@@ -92,27 +85,46 @@ const PulseNavbar = () => {
         disclaimer: payload?.disclaimer || null,
       });
 
-      const niftyPrice = toNumeric(payload?.nifty?.price);
-      const sensexPrice = toNumeric(payload?.sensex?.price);
-      const niftyPoint =
-        niftyPrice !== null
-          ? {
-              time: toUnixSeconds(payload?.nifty?.time),
-              value: niftyPrice,
-            }
-          : null;
-      const sensexPoint =
-        sensexPrice !== null
-          ? {
-              time: toUnixSeconds(payload?.sensex?.time),
-              value: sensexPrice,
-            }
-          : null;
+      const niftyPrice = payload?.nifty?.price;
+      const sensexPrice = payload?.sensex?.price;
+      const niftyTime = toUnixSeconds(payload?.nifty?.time);
+      const sensexTime = toUnixSeconds(payload?.sensex?.time);
 
-      setIndexLiveSeries((prev) => ({
-        nifty: pushLivePoint(prev.nifty, niftyPoint),
-        sensex: pushLivePoint(prev.sensex, sensexPoint),
-      }));
+      if (indexTimeframe.nifty === "1D" && typeof niftyPrice === "number") {
+        const bucketTime = Math.floor(niftyTime / 60) * 60;
+        setIndexCharts((prev) => {
+          const key = getIndexKey("nifty", "1D");
+          const current = prev[key] || [];
+          const sameDay =
+            current.length === 0 ||
+            toDateKey(current[current.length - 1]?.time) ===
+              toDateKey(bucketTime);
+          if (!sameDay) return { ...prev, [key]: [] };
+          const next = upsertIntradayPoint(current, {
+            time: bucketTime,
+            value: niftyPrice,
+          });
+          return { ...prev, [key]: next };
+        });
+      }
+
+      if (indexTimeframe.sensex === "1D" && typeof sensexPrice === "number") {
+        const bucketTime = Math.floor(sensexTime / 60) * 60;
+        setIndexCharts((prev) => {
+          const key = getIndexKey("sensex", "1D");
+          const current = prev[key] || [];
+          const sameDay =
+            current.length === 0 ||
+            toDateKey(current[current.length - 1]?.time) ===
+              toDateKey(bucketTime);
+          if (!sameDay) return { ...prev, [key]: [] };
+          const next = upsertIntradayPoint(current, {
+            time: bucketTime,
+            value: sensexPrice,
+          });
+          return { ...prev, [key]: next };
+        });
+      }
     };
 
     addMarketListener("indices", handleIndices);
@@ -167,9 +179,6 @@ const PulseNavbar = () => {
     return `${value.toFixed(2)}%`;
   };
 
-  const toNumeric = (value) =>
-    typeof value === "number" && !Number.isNaN(value) ? value : null;
-
   const toUnixSeconds = (timeValue) => {
     if (typeof timeValue === "number" && !Number.isNaN(timeValue)) {
       return timeValue > 1e12
@@ -185,7 +194,7 @@ const PulseNavbar = () => {
 
   const toDateKey = (unixSeconds) => {
     const date = new Date(unixSeconds * 1000);
-    return `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
   };
 
   const getMarketOpenSeconds = (unixSeconds) => {
@@ -203,29 +212,13 @@ const PulseNavbar = () => {
     });
   };
 
-  const pushLivePoint = (series, point, maxPoints = 25000) => {
-    if (!point) return series;
+  const upsertIntradayPoint = (series, point) => {
+    if (!point || typeof point.time !== "number") return series;
     const next = Array.isArray(series) ? [...series] : [];
-    const last = next[next.length - 1];
-    if (last && toDateKey(last.time) !== toDateKey(point.time)) {
-      const openSeconds = getMarketOpenSeconds(point.time);
-      return openSeconds < point.time
-        ? [{ time: openSeconds, value: point.value }, point]
-        : [point];
-    }
-    if (next.length === 0) {
-      const openSeconds = getMarketOpenSeconds(point.time);
-      if (openSeconds < point.time) {
-        next.push({ time: openSeconds, value: point.value });
-      }
-    }
-    const updatedLast = next[next.length - 1];
-    if (updatedLast && updatedLast.time === point.time) {
-      next[next.length - 1] = point;
-      return next;
-    }
-    next.push(point);
-    if (next.length > maxPoints) return next.slice(-maxPoints);
+    const index = next.findIndex((item) => item.time === point.time);
+    if (index >= 0) next[index] = point;
+    else next.push(point);
+    next.sort((a, b) => a.time - b.time);
     return next;
   };
 
@@ -240,98 +233,61 @@ const PulseNavbar = () => {
 
   const getIndexKey = (key, timeframe) => `${key}_${timeframe}`;
 
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const openSeconds = getMarketOpenSeconds(nowSeconds);
+  const intradayRange = { from: openSeconds, to: nowSeconds };
+
   const niftyKey = getIndexKey("nifty", indexTimeframe.nifty);
   const sensexKey = getIndexKey("sensex", indexTimeframe.sensex);
   const niftyIsLive = indexTimeframe.nifty === "1D";
   const sensexIsLive = indexTimeframe.sensex === "1D";
-  const niftyChartData = niftyIsLive
-    ? indexLiveSeries.nifty
-    : indexCharts[niftyKey] || [];
-  const sensexChartData = sensexIsLive
-    ? indexLiveSeries.sensex
-    : indexCharts[sensexKey] || [];
+  const niftyChartData = indexCharts[niftyKey] || [];
+  const sensexChartData = indexCharts[sensexKey] || [];
   const niftyLoading =
-    !niftyIsLive &&
-    indexChartLoading[niftyKey] &&
-    (!indexCharts[niftyKey] || indexCharts[niftyKey].length === 0);
+    indexChartLoading[niftyKey] && niftyChartData.length === 0;
   const sensexLoading =
-    !sensexIsLive &&
-    indexChartLoading[sensexKey] &&
-    (!indexCharts[sensexKey] || indexCharts[sensexKey].length === 0);
+    indexChartLoading[sensexKey] && sensexChartData.length === 0;
   const niftyLiveEmpty = niftyIsLive && niftyChartData.length === 0;
   const sensexLiveEmpty = sensexIsLive && sensexChartData.length === 0;
   const niftyHeaderLabel = niftyIsLive
-    ? formatDateLabel(niftyChartData[niftyChartData.length - 1]?.time)
+    ? formatDateLabel(nowSeconds)
     : indexTimeframe.nifty;
   const sensexHeaderLabel = sensexIsLive
-    ? formatDateLabel(sensexChartData[sensexChartData.length - 1]?.time)
+    ? formatDateLabel(nowSeconds)
     : indexTimeframe.sensex;
-
   useEffect(() => {
-    const handleChartUpdate = (message) => {
-      const key = message?.key || "";
-      if (!key.startsWith("index_")) return;
-      const cacheKey = key.replace(/^index_/, "");
-      if (message?.error) {
-        setIndexCharts((prev) => ({ ...prev, [cacheKey]: [] }));
-        setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: false }));
-        return;
-      }
-      setIndexCharts((prev) => ({
-        ...prev,
-        [cacheKey]: Array.isArray(message?.data) ? message.data : [],
-      }));
-      setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: false }));
-    };
-
-    addMarketListener("chart_update", handleChartUpdate);
-    return () => {
-      removeMarketListener("chart_update", handleChartUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!hoveredIndex) {
-      if (activeIndexChartKeyRef.current) {
-        unsubscribeChart(activeIndexChartKeyRef.current);
-        activeIndexChartKeyRef.current = null;
-      }
-      return;
-    }
+    if (!hoveredIndex) return;
 
     const timeframe = indexTimeframe[hoveredIndex];
-    if (timeframe === "1D") {
-      if (activeIndexChartKeyRef.current) {
-        unsubscribeChart(activeIndexChartKeyRef.current);
-        activeIndexChartKeyRef.current = null;
-      }
-      return;
-    }
     const frame = INDEX_TIMEFRAMES[timeframe] || INDEX_TIMEFRAMES["1D"];
     const symbol = hoveredIndex === "nifty" ? "^NSEI" : "^BSESN";
     const cacheKey = getIndexKey(hoveredIndex, timeframe);
-    const subscriptionKey = `index_${cacheKey}`;
-
-    if (
-      activeIndexChartKeyRef.current &&
-      activeIndexChartKeyRef.current !== subscriptionKey
-    ) {
-      unsubscribeChart(activeIndexChartKeyRef.current);
-    }
-    activeIndexChartKeyRef.current = subscriptionKey;
+    let isActive = true;
 
     setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: true }));
 
-    subscribeChart({
-      key: subscriptionKey,
-      symbol,
-      range: frame.range,
-      interval: frame.interval,
-    });
+    fetch(
+      `/api/market/chart/${encodeURIComponent(symbol)}?range=${
+        frame.range
+      }&interval=${frame.interval}`,
+    )
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        const data = Array.isArray(json?.data) ? json.data : [];
+        setIndexCharts((prev) => ({ ...prev, [cacheKey]: data }));
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setIndexCharts((prev) => ({ ...prev, [cacheKey]: [] }));
+      })
+      .finally(() => {
+        if (!isActive) return;
+        setIndexChartLoading((prev) => ({ ...prev, [cacheKey]: false }));
+      });
 
     return () => {
-      unsubscribeChart(subscriptionKey);
-      activeIndexChartKeyRef.current = null;
+      isActive = false;
     };
   }, [hoveredIndex, indexTimeframe.nifty, indexTimeframe.sensex]);
 
@@ -500,15 +456,14 @@ const PulseNavbar = () => {
                   </div>
                   {niftyLoading || niftyLiveEmpty ? (
                     <div className="text-xs text-gray-400">
-                      {niftyLiveEmpty
-                        ? "Waiting for live ticks..."
-                        : "Loading chart..."}
+                      {niftyLoading ? "Loading chart..." : "No chart data."}
                     </div>
                   ) : (
                     <StockChart
                       data={niftyChartData}
                       trend={niftyTrend}
-                      timeMode={niftyIsLive ? "intraday" : undefined}
+                      timeMode={niftyIsLive ? "intraday-hourly" : undefined}
+                      timeRange={niftyIsLive ? intradayRange : undefined}
                       height={140}
                       minHeight={140}
                     />
@@ -566,15 +521,14 @@ const PulseNavbar = () => {
                   </div>
                   {sensexLoading || sensexLiveEmpty ? (
                     <div className="text-xs text-gray-400">
-                      {sensexLiveEmpty
-                        ? "Waiting for live ticks..."
-                        : "Loading chart..."}
+                      {sensexLoading ? "Loading chart..." : "No chart data."}
                     </div>
                   ) : (
                     <StockChart
                       data={sensexChartData}
                       trend={sensexTrend}
-                      timeMode={sensexIsLive ? "intraday" : undefined}
+                      timeMode={sensexIsLive ? "intraday-hourly" : undefined}
+                      timeRange={sensexIsLive ? intradayRange : undefined}
                       height={140}
                       minHeight={140}
                     />

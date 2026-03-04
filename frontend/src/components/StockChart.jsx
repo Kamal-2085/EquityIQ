@@ -7,6 +7,7 @@ const StockChart = ({
   minHeight = 320,
   trend,
   timeMode,
+  timeRange,
 }) => {
   const containerRef = useRef();
   const chartRef = useRef(null);
@@ -14,11 +15,30 @@ const StockChart = ({
 
   const formatTimeLabel = (unixTime) => {
     const date = new Date(unixTime * 1000);
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
+
+  const getTickFormatter = () => {
+    if (timeMode === "intraday-hourly") {
+      return (time) => {
+        const date = new Date(time * 1000);
+        if (date.getMinutes() !== 15) return "";
+        return formatTimeLabel(time);
+      };
+    }
+    if (timeMode === "intraday") {
+      return (time) => formatTimeLabel(time);
+    }
+    return undefined;
+  };
+
+  const getCrosshairFormatter = () => {
+    if (timeMode === "intraday-hourly" || timeMode === "intraday") {
+      return (time) => formatTimeLabel(time);
+    }
+    return undefined;
   };
 
   const resolveTrendOverride = (value) => {
@@ -48,6 +68,9 @@ const StockChart = ({
         background: { color: "#ffffff" },
         textColor: "#333",
       },
+      localization: {
+        timeFormatter: getCrosshairFormatter(),
+      },
       grid: {
         vertLines: { visible: false },
         horzLines: { visible: false },
@@ -57,8 +80,7 @@ const StockChart = ({
       },
       timeScale: {
         borderVisible: false,
-        tickMarkFormatter:
-          timeMode === "intraday" ? (time) => formatTimeLabel(time) : undefined,
+        tickMarkFormatter: getTickFormatter(),
       },
     });
 
@@ -98,8 +120,10 @@ const StockChart = ({
     if (!chartRef.current) return;
     chartRef.current.applyOptions({
       timeScale: {
-        tickMarkFormatter:
-          timeMode === "intraday" ? (time) => formatTimeLabel(time) : undefined,
+        tickMarkFormatter: getTickFormatter(),
+      },
+      localization: {
+        timeFormatter: getCrosshairFormatter(),
       },
     });
   }, [timeMode]);
@@ -134,7 +158,13 @@ const StockChart = ({
     }
     seriesRef.current.setData(safeData);
     chartRef.current?.timeScale().fitContent();
-  }, [data, trend]);
+    if (timeRange?.from && timeRange?.to) {
+      chartRef.current?.timeScale().setVisibleRange({
+        from: timeRange.from,
+        to: timeRange.to,
+      });
+    }
+  }, [data, trend, timeRange]);
 
   return <div ref={containerRef} className="w-full" style={{ minHeight }} />;
 };

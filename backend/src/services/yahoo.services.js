@@ -1,3 +1,4 @@
+import axios from "axios";
 import YahooFinance from "yahoo-finance2";
 
 const yahooFinance = new YahooFinance({
@@ -105,9 +106,51 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
     timestamps
       .map((time, i) => ({
         time,
-        value: closes[i],
+        value: closes[i] ?? null,
       }))
-      .filter((point) => point.value !== null && point.value !== undefined);
+      .filter((point) => point.time !== null && point.time !== undefined);
+
+  const fillForward = (points) => {
+    let lastValue = null;
+    return points
+      .map((point) => {
+        if (point.value === null || point.value === undefined) {
+          return lastValue === null
+            ? null
+            : { time: point.time, value: lastValue };
+        }
+        lastValue = point.value;
+        return point;
+      })
+      .filter(Boolean);
+  };
+
+  const fetchDirectChart = async (symbolValue) => {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
+        symbolValue,
+      )}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(
+        interval,
+      )}`;
+      const response = await axios.get(url);
+      const result = response?.data?.chart?.result?.[0];
+      const timestamps = result?.timestamp || [];
+      const closes = result?.indicators?.quote?.[0]?.close || [];
+      if (!Array.isArray(timestamps) || timestamps.length === 0) return null;
+      const points = mapChart(timestamps, closes);
+      const data = isIntraday
+        ? fillForward(points)
+        : points.filter(
+            (point) => point.value !== null && point.value !== undefined,
+          );
+      return {
+        data,
+        interval: result?.meta?.dataGranularity || interval,
+      };
+    } catch {
+      return null;
+    }
+  };
 
   const toUtcDateKey = (unixTime) => {
     const date = new Date(unixTime * 1000);
@@ -146,8 +189,13 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
 
     const quotes = result?.indicators?.quote?.[0];
     const closes = quotes?.close || [];
+    const points = mapChart(timestamps, closes);
     return {
-      data: mapChart(timestamps, closes),
+      data: isIntraday
+        ? fillForward(points)
+        : points.filter(
+            (point) => point.value !== null && point.value !== undefined,
+          ),
       interval: result?.meta?.interval || usedInterval,
     };
   };
@@ -164,6 +212,22 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
           meta: {
             intradayFallback: false,
             interval: safeHistoricalInterval,
+            range,
+          },
+        };
+      }
+    }
+  }
+
+  if (isIntraday && range === "1d") {
+    for (const candidate of candidates) {
+      const directResult = await fetchDirectChart(candidate);
+      if (directResult?.data?.length > 0) {
+        return {
+          data: directResult.data,
+          meta: {
+            intradayFallback: false,
+            interval: directResult.interval,
             range,
           },
         };

@@ -13,8 +13,7 @@ import { FaCartPlus } from "react-icons/fa";
 import {
   addMarketListener,
   removeMarketListener,
-  subscribeChart,
-  unsubscribeChart,
+  setQuoteSymbols,
 } from "../../services/marketSocket";
 const TIMEFRAMES = {
   "1D": { range: "1d", interval: "1m" },
@@ -168,6 +167,34 @@ const CompanyDetails = () => {
     };
   }, [decodedName, initialSymbol, resolvedSymbol]);
 
+  const toUnixSeconds = (timeValue) => {
+    if (typeof timeValue === "number" && !Number.isNaN(timeValue)) {
+      return timeValue > 1e12
+        ? Math.floor(timeValue / 1000)
+        : Math.floor(timeValue);
+    }
+    if (typeof timeValue === "string") {
+      const parsed = Date.parse(timeValue);
+      if (!Number.isNaN(parsed)) return Math.floor(parsed / 1000);
+    }
+    return Math.floor(Date.now() / 1000);
+  };
+
+  const toDateKey = (unixSeconds) => {
+    const date = new Date(unixSeconds * 1000);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  };
+
+  const upsertIntradayPoint = (series, point) => {
+    if (!point || typeof point.time !== "number") return series;
+    const next = Array.isArray(series) ? [...series] : [];
+    const index = next.findIndex((item) => item.time === point.time);
+    if (index >= 0) next[index] = point;
+    else next.push(point);
+    next.sort((a, b) => a.time - b.time);
+    return next;
+  };
+
   useEffect(() => {
     if (!resolvedSymbol) return;
 
@@ -176,38 +203,61 @@ const CompanyDetails = () => {
     setIsLoading(true);
     setError("");
 
-    subscribeChart({
-      key: chartKeyRef.current,
-      symbol: resolvedSymbol,
-      range,
-      interval,
-    });
+    fetch(
+      `/api/market/chart/${encodeURIComponent(
+        resolvedSymbol,
+      )}?range=${range}&interval=${interval}`,
+    )
+      .then((res) => res.json())
+      .then((json) => {
+        if (!isActive) return;
+        setChartData(Array.isArray(json?.data) ? json.data : []);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setChartData([]);
+        setError("Unable to load chart data.");
+        setIsLoading(false);
+      });
 
     return () => {
       isActive = false;
-      unsubscribeChart(chartKeyRef.current);
     };
   }, [resolvedSymbol, timeframe]);
 
   useEffect(() => {
-    const handleChartUpdate = (message) => {
-      const key = message?.key || "";
-      if (key !== chartKeyRef.current) return;
-      if (message?.error) {
-        setChartData([]);
-        setError("Unable to load chart data.");
-        setIsLoading(false);
-        return;
-      }
-      setChartData(Array.isArray(message?.data) ? message.data : []);
-      setIsLoading(false);
+    if (!resolvedSymbol || timeframe !== "1D") return;
+
+    setQuoteSymbols([resolvedSymbol]);
+
+    const handleQuotes = (message) => {
+      const data = message?.data?.data || {};
+      const quote = data?.[resolvedSymbol];
+      if (!quote) return;
+      const price = quote?.regularMarketPrice ?? quote?.price;
+      if (typeof price !== "number") return;
+      const time = toUnixSeconds(
+        quote?.regularMarketTime ?? quote?.regularMarketTimeMs ?? Date.now(),
+      );
+      const bucketTime = Math.floor(time / 60) * 60;
+
+      setChartData((prev) => {
+        const current = Array.isArray(prev) ? prev : [];
+        const sameDay =
+          current.length === 0 ||
+          toDateKey(current[current.length - 1]?.time) === toDateKey(bucketTime);
+        if (!sameDay) return [];
+        return upsertIntradayPoint(current, { time: bucketTime, value: price });
+      });
     };
 
-    addMarketListener("chart_update", handleChartUpdate);
+    addMarketListener("quotes", handleQuotes);
     return () => {
-      removeMarketListener("chart_update", handleChartUpdate);
+      removeMarketListener("quotes", handleQuotes);
+      setQuoteSymbols([]);
     };
-  }, []);
+  }, [resolvedSymbol, timeframe]);
 
   useEffect(() => {
     if (!resolvedSymbol) return;
