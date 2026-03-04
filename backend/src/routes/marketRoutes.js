@@ -118,11 +118,17 @@ router.get("/search", async (req, res) => {
       return res.status(400).json({ message: "query is required" });
     }
 
-    const results = await yahooFinance.search(query, {
-      quotesCount: 5,
-      newsCount: 0,
-      enableFuzzyQuery: true,
-    });
+    const results = await yahooFinance.search(
+      query,
+      {
+        quotesCount: 5,
+        newsCount: 0,
+        enableFuzzyQuery: true,
+      },
+      {
+        validateResult: false,
+      },
+    );
 
     const quotes = results?.quotes || [];
     const term = query.toLowerCase();
