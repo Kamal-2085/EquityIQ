@@ -134,6 +134,7 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
       )}`;
       const response = await axios.get(url);
       const result = response?.data?.chart?.result?.[0];
+      const meta = result?.meta || null;
       const timestamps = result?.timestamp || [];
       const closes = result?.indicators?.quote?.[0]?.close || [];
       if (!Array.isArray(timestamps) || timestamps.length === 0) return null;
@@ -145,7 +146,12 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
           );
       return {
         data,
-        interval: result?.meta?.dataGranularity || interval,
+        interval: meta?.dataGranularity || interval,
+        meta: meta
+          ? {
+              regularMarketTime: meta?.regularMarketTime ?? null,
+            }
+          : null,
       };
     } catch {
       return null;
@@ -229,6 +235,7 @@ export const getChartData = async (symbol, range = "1mo", interval = "5m") => {
             intradayFallback: false,
             interval: directResult.interval,
             range,
+            regularMarketTime: directResult.meta?.regularMarketTime ?? null,
           },
         };
       }

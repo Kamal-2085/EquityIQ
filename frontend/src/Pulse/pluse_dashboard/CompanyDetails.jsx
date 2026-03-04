@@ -96,7 +96,6 @@ const CompanyDetails = () => {
   const { watchlist, setWatchlist } = useWatchlist();
   const exchangeMenuRef = useRef(null);
   const exchangeButtonRef = useRef(null);
-  const chartKeyRef = useRef("company_details");
 
   useEffect(() => {
     const baseSymbol = resolvedSymbol ? getBaseSymbol(resolvedSymbol) : "";
@@ -185,6 +184,13 @@ const CompanyDetails = () => {
     return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
   };
 
+  const getMarketOpenSeconds = (unixSeconds) => {
+    const date = new Date(unixSeconds * 1000);
+    const open = new Date(date);
+    open.setHours(9, 15, 0, 0);
+    return Math.floor(open.getTime() / 1000);
+  };
+
   const upsertIntradayPoint = (series, point) => {
     if (!point || typeof point.time !== "number") return series;
     const next = Array.isArray(series) ? [...series] : [];
@@ -211,7 +217,29 @@ const CompanyDetails = () => {
       .then((res) => res.json())
       .then((json) => {
         if (!isActive) return;
-        setChartData(Array.isArray(json?.data) ? json.data : []);
+        const data = Array.isArray(json?.data) ? json.data : [];
+        let nextData = data;
+
+        if (range === "1d" && interval === "1m" && data.length > 0) {
+          const lastPoint = data[data.length - 1];
+          const lastValue = lastPoint?.value;
+          if (
+            typeof lastPoint?.time === "number" &&
+            lastValue !== null &&
+            lastValue !== undefined
+          ) {
+            const marketTime = toUnixSeconds(json?.meta?.regularMarketTime);
+            const bucketTime = Math.floor(marketTime / 60) * 60;
+            if (toDateKey(lastPoint.time) === toDateKey(bucketTime)) {
+              nextData = upsertIntradayPoint(data, {
+                time: bucketTime,
+                value: lastValue,
+              });
+            }
+          }
+        }
+
+        setChartData(nextData);
         setIsLoading(false);
       })
       .catch(() => {
@@ -246,7 +274,8 @@ const CompanyDetails = () => {
         const current = Array.isArray(prev) ? prev : [];
         const sameDay =
           current.length === 0 ||
-          toDateKey(current[current.length - 1]?.time) === toDateKey(bucketTime);
+          toDateKey(current[current.length - 1]?.time) ===
+            toDateKey(bucketTime);
         if (!sameDay) return [];
         return upsertIntradayPoint(current, { time: bucketTime, value: price });
       });
@@ -349,6 +378,10 @@ const CompanyDetails = () => {
   }, [exchangeOpen]);
 
   const isIntradayTimeframe = timeframe === "1D" || timeframe === "1W";
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const openSeconds = getMarketOpenSeconds(nowSeconds);
+  const intradayRange = { from: openSeconds, to: nowSeconds };
+  const isLiveIntraday = timeframe === "1D";
   const dayChange =
     typeof stockPrice === "number" &&
     typeof priceData?.previousClose === "number"
@@ -540,6 +573,8 @@ const CompanyDetails = () => {
                 <StockChart
                   data={chartData}
                   trend={timeframe === "1D" ? dayChange : null}
+                  timeMode={isLiveIntraday ? "intraday-hourly" : undefined}
+                  timeRange={isLiveIntraday ? intradayRange : undefined}
                 />
               )}
             </div>

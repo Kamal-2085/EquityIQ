@@ -85,12 +85,12 @@ const PulseNavbar = () => {
         disclaimer: payload?.disclaimer || null,
       });
 
-      const niftyPrice = payload?.nifty?.price;
-      const sensexPrice = payload?.sensex?.price;
+      const niftyPrice = Number(payload?.nifty?.price);
+      const sensexPrice = Number(payload?.sensex?.price);
       const niftyTime = toUnixSeconds(payload?.nifty?.time);
       const sensexTime = toUnixSeconds(payload?.sensex?.time);
 
-      if (indexTimeframe.nifty === "1D" && typeof niftyPrice === "number") {
+      if (indexTimeframe.nifty === "1D" && !Number.isNaN(niftyPrice)) {
         const bucketTime = Math.floor(niftyTime / 60) * 60;
         setIndexCharts((prev) => {
           const key = getIndexKey("nifty", "1D");
@@ -108,7 +108,7 @@ const PulseNavbar = () => {
         });
       }
 
-      if (indexTimeframe.sensex === "1D" && typeof sensexPrice === "number") {
+      if (indexTimeframe.sensex === "1D" && !Number.isNaN(sensexPrice)) {
         const bucketTime = Math.floor(sensexTime / 60) * 60;
         setIndexCharts((prev) => {
           const key = getIndexKey("sensex", "1D");
@@ -275,7 +275,32 @@ const PulseNavbar = () => {
       .then((json) => {
         if (!isActive) return;
         const data = Array.isArray(json?.data) ? json.data : [];
-        setIndexCharts((prev) => ({ ...prev, [cacheKey]: data }));
+        let nextData = data;
+
+        if (
+          frame.range === "1d" &&
+          frame.interval === "1m" &&
+          data.length > 0
+        ) {
+          const lastPoint = data[data.length - 1];
+          const lastValue = lastPoint?.value;
+          if (
+            typeof lastPoint?.time === "number" &&
+            lastValue !== null &&
+            lastValue !== undefined
+          ) {
+            const marketTime = toUnixSeconds(json?.meta?.regularMarketTime);
+            const bucketTime = Math.floor(marketTime / 60) * 60;
+            if (toDateKey(lastPoint.time) === toDateKey(bucketTime)) {
+              nextData = upsertIntradayPoint(data, {
+                time: bucketTime,
+                value: lastValue,
+              });
+            }
+          }
+        }
+
+        setIndexCharts((prev) => ({ ...prev, [cacheKey]: nextData }));
       })
       .catch(() => {
         if (!isActive) return;
