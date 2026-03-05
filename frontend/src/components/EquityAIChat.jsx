@@ -60,20 +60,7 @@ const buildExplanation = ({ finalScore, scores, recommendation }) => {
   )}). Overall signals are ${tone}, so the system recommends ${rec}.`;
 };
 
-const buildConfidence = (scores, errors) => {
-  const values = Object.values(scores || {}).filter(
-    (value) => typeof value === "number" && !Number.isNaN(value),
-  );
-  if (values.length === 0) return "Low (~55%)";
-  const maxValue = Math.max(...values);
-  const minValue = Math.min(...values);
-  const errorCount = Object.keys(errors || {}).length;
-  const spread = maxValue - minValue;
-  let confidence = Math.round(82 - spread * 4 - errorCount * 8);
-  confidence = Math.min(90, Math.max(45, confidence));
-  const label = confidence >= 80 ? "High" : confidence >= 65 ? "Medium" : "Low";
-  return `${label} (~${confidence}%)`;
-};
+// Confidence indicator removed per design decision. UI no longer shows confidence.
 
 const AnalysisResult = ({ payload, companyName, symbol, formatScore }) => {
   const name = companyName || symbol || "Company";
@@ -81,7 +68,6 @@ const AnalysisResult = ({ payload, companyName, symbol, formatScore }) => {
   const errors = payload?.errors || {};
   const scoreEntries = Object.entries(scores);
   const recommendation = payload?.recommendation || "N/A";
-  const confidence = buildConfidence(scores, errors);
   const explanation = buildExplanation({
     finalScore: payload?.finalScore,
     scores,
@@ -119,12 +105,22 @@ const AnalysisResult = ({ payload, companyName, symbol, formatScore }) => {
         {scoreEntries.length === 0 ? (
           <div>No analyzer scores available.</div>
         ) : (
-          scoreEntries.map(([key, value]) => (
-            <div key={key} className="flex items-center justify-between">
-              <span>{SCORE_LABELS[key] || key}</span>
-              <span className="font-semibold">{formatScore(value)}</span>
-            </div>
-          ))
+          scoreEntries.map(([key, value]) => {
+            const isDefault = Object.prototype.hasOwnProperty.call(errors, key);
+            return (
+              <div key={key} className="flex items-center justify-between">
+                <span>{SCORE_LABELS[key] || key}</span>
+                <span className="flex items-center gap-2">
+                  {isDefault ? (
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                      Default
+                    </span>
+                  ) : null}
+                  <span className="font-semibold">{formatScore(value)}</span>
+                </span>
+              </div>
+            );
+          })
         )}
         {Object.keys(errors).length > 0 ? (
           <div className="text-xs text-orange-600">
@@ -140,11 +136,6 @@ const AnalysisResult = ({ payload, companyName, symbol, formatScore }) => {
 
       <div className="my-4 h-px w-full bg-gray-200" />
 
-      <div className="text-sm font-semibold text-gray-900">Confidence</div>
-      <div className="mt-2 text-sm text-gray-700">{confidence}</div>
-
-      <div className="my-4 h-px w-full bg-gray-200" />
-
       <p className="text-xs text-gray-500">{disclaimer}</p>
     </div>
   );
@@ -156,6 +147,9 @@ const EquityAIChat = ({
   companyProfile,
   priceData,
   fundamentals,
+  newsItems,
+  chartData,
+  useOneYearHistory,
   onClose,
 }) => {
   const [messages, setMessages] = useState([
@@ -181,6 +175,17 @@ const EquityAIChat = ({
 
   const formatScore = (value) =>
     typeof value === "number" && !Number.isNaN(value) ? value.toFixed(2) : "--";
+
+  const normalizeChartData = (series) => {
+    const raw = Array.isArray(series) ? series : [];
+    return raw
+      .map((point) => ({
+        time: point?.time ?? null,
+        close: point?.value ?? point?.close ?? null,
+        volume: point?.volume ?? null,
+      }))
+      .filter((point) => typeof point.close === "number");
+  };
 
   const loadHistoricalData = async () => {
     if (!symbol) {
@@ -216,6 +221,50 @@ const EquityAIChat = ({
     return normalized;
   };
 
+  const normalizeNewsItems = (items) => {
+    const list = Array.isArray(items) ? items : [];
+
+    // sanitize helper: strip HTML, collapse whitespace, truncate
+    const sanitize = (s, max = 1000) => {
+      if (s === null || s === undefined) return "";
+      const str = String(s)
+        .replace(/<[^>]*>/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      return str.length > max ? str.slice(0, max) : str;
+    };
+
+    return list.slice(0, 5).map((item) => {
+      const titleRaw = item.title || item.headline || "";
+      const summaryRaw = item.snippet || item.summary || "";
+      const contentRaw =
+        item.content || item.snippet || item.summary || item.title || "";
+      return {
+        title: sanitize(titleRaw, 200),
+        summary: sanitize(summaryRaw, 400),
+        content: sanitize(contentRaw, 1000),
+        publishedAt: item.publishedAt || item.publishedAtText || null,
+        source: item.publisher || item.source || "Unknown",
+        url: item.link || item.url || null,
+      };
+    });
+  };
+
+  const fetchNewsForCompany = async (company) => {
+    if (!company) return null;
+    try {
+      const resp = await fetch(
+        `/api/market/news/${encodeURIComponent(company)}`,
+      );
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+      return normalizeNewsItems(results);
+    } catch (e) {
+      return null;
+    }
+  };
+
   const handleSend = async () => {
     if (isAnalyzing) return;
     setIsAnalyzing(true);
@@ -224,7 +273,25 @@ const EquityAIChat = ({
     setAnalysisResult(null);
 
     try {
-      const historical = await loadHistoricalData();
+      const normalizedChart = normalizeChartData(chartData);
+      const historical = useOneYearHistory
+        ? await loadHistoricalData()
+        : normalizedChart.length > 0
+        ? normalizedChart
+        : await loadHistoricalData();
+      // use displayed news when available; fallback to fetch (non-fatal)
+      let news = null;
+      if (Array.isArray(newsItems) && newsItems.length > 0) {
+        news = normalizeNewsItems(newsItems);
+      } else {
+        try {
+          const companyForNews = (companyName || symbol || "").trim();
+          if (companyForNews) news = await fetchNewsForCompany(companyForNews);
+        } catch (e) {
+          news = null;
+        }
+      }
+
       const response = await fetch("/api/market/analysis", {
         method: "POST",
         headers: {
@@ -237,6 +304,7 @@ const EquityAIChat = ({
           companyProfile: companyProfile || null,
           priceData: priceData || null,
           fundamentals: fundamentals || null,
+          news: news || null,
         }),
       });
 

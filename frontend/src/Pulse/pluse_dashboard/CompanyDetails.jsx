@@ -672,6 +672,9 @@ const CompanyDetails = () => {
               companyProfile={companyProfile}
               priceData={priceData}
               fundamentals={fundamentals}
+              newsItems={news}
+              chartData={chartData}
+              useOneYearHistory
               onClose={() => setShowAiChat(false)}
             />
           ) : (

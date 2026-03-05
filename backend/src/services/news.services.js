@@ -13,6 +13,10 @@ export const fetchCompanyNews = async (companyName) => {
     .trim()
     .toLowerCase();
 
+  if (!process.env.SERPAPI_KEY) {
+    return [];
+  }
+
   const now = Date.now();
   const cached = newsCache.get(key);
   if (cached && cached.expiresAt > now) {
@@ -62,9 +66,9 @@ export const fetchCompanyNews = async (companyName) => {
 
       return normalized;
     } catch (err) {
-      // on error, if we have any cached data return it (even if expired), otherwise rethrow
+      // on error, if we have any cached data return it (even if expired), otherwise return empty
       if (cached && cached.data) return cached.data;
-      throw err;
+      return [];
     } finally {
       pendingNewsRequests.delete(key);
     }
