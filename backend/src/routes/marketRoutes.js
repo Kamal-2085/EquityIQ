@@ -1,11 +1,18 @@
 import express from "express";
+import fs from "fs";
+import path from "path";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
 import YahooFinance from "yahoo-finance2";
 import Stock from "../models/Stock.model.js";
 import { getChartData } from "../services/yahoo.services.js";
+import { fetchCompanyNews } from "../services/news.services.js";
 const router = express.Router();
 const yahooFinance = new YahooFinance({
   suppressNotices: ["yahooSurvey"],
 });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const profileCache = new Map();
 const priceCache = new Map();
 const fundamentalsCache = new Map();
@@ -48,6 +55,195 @@ const fetchDomainFromYahoo = async (symbols) => {
   }
   return null;
 };
+
+const runPythonAnalysis = ({
+  symbol,
+  companyName,
+  historical,
+  companyProfile,
+  priceData,
+  fundamentals,
+  news,
+}) =>
+  new Promise((resolve, reject) => {
+    const predictorDir = path.resolve(
+      __dirname,
+      "../../..",
+      "Stock Price Predictor",
+    );
+    const scriptPath = path.join(predictorDir, "FinalRecommendation.py");
+    if (!fs.existsSync(scriptPath)) {
+      reject(new Error("Model script not found"));
+      return;
+    }
+
+    let historicalPath = null;
+    if (Array.isArray(historical) && historical.length > 0) {
+      historicalPath = path.join(
+        predictorDir,
+        `historical_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+      );
+      fs.writeFileSync(historicalPath, JSON.stringify(historical));
+    }
+
+    let companyProfilePath = null;
+    if (companyProfile && typeof companyProfile === "object") {
+      companyProfilePath = path.join(
+        predictorDir,
+
+        `company_profile_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+      );
+      try {
+        fs.writeFileSync(companyProfilePath, JSON.stringify(companyProfile));
+      } catch (e) {
+        // ignore write errors, analysis will proceed without profile
+        companyProfilePath = null;
+      }
+    }
+
+    let priceMarketPath = null;
+    if (priceData && typeof priceData === "object") {
+      priceMarketPath = path.join(
+        predictorDir,
+        `price_market_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+      );
+      try {
+        fs.writeFileSync(priceMarketPath, JSON.stringify(priceData));
+      } catch (e) {
+        // ignore write errors, analysis will proceed without price/market data
+        priceMarketPath = null;
+      }
+    }
+
+    let fundamentalsPath = null;
+    if (fundamentals && typeof fundamentals === "object") {
+      fundamentalsPath = path.join(
+        predictorDir,
+        `fundamentals_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+      );
+      try {
+        fs.writeFileSync(fundamentalsPath, JSON.stringify(fundamentals));
+      } catch (e) {
+        // ignore write errors, analysis will proceed without fundamentals
+        fundamentalsPath = null;
+      }
+    }
+
+    let newsPath = null;
+    if (news && Array.isArray(news) && news.length > 0) {
+      newsPath = path.join(
+        predictorDir,
+        `news_${Date.now()}_${Math.random().toString(16).slice(2)}.json`,
+      );
+      try {
+        fs.writeFileSync(newsPath, JSON.stringify(news));
+      } catch (e) {
+        // ignore write errors, analysis will proceed without news
+        newsPath = null;
+      }
+    }
+
+    const pythonCmd = process.env.PYTHON_PATH || "python";
+    const env = {
+      ...process.env,
+      EQUITYIQ_OUTPUT: "json",
+    };
+    if (symbol) env.TICKER_SYMBOL = symbol;
+    if (companyName) env.COMPANY_NAME = companyName;
+    if (historicalPath) env.HISTORICAL_PATH = historicalPath;
+    if (companyProfilePath) env.COMPANY_PROFILE_PATH = companyProfilePath;
+    if (priceMarketPath) env.PRICE_MARKET_PATH = priceMarketPath;
+    if (fundamentalsPath) env.FUNDAMENTALS_PATH = fundamentalsPath;
+    if (newsPath) env.NEWS_PATH = newsPath;
+
+    const child = spawn(pythonCmd, [scriptPath], {
+      cwd: predictorDir,
+      env,
+      windowsHide: true,
+    });
+
+    let stdout = "";
+    let stderr = "";
+    const timeoutMs = 180000;
+    const timeoutId = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, timeoutMs);
+
+    child.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    const cleanupHistorical = () => {
+      if (historicalPath && fs.existsSync(historicalPath)) {
+        try {
+          fs.unlinkSync(historicalPath);
+        } catch {
+          // ignore cleanup failures
+        }
+      }
+      if (companyProfilePath && fs.existsSync(companyProfilePath)) {
+        try {
+          fs.unlinkSync(companyProfilePath);
+        } catch {
+          // ignore cleanup failures
+        }
+      }
+      if (priceMarketPath && fs.existsSync(priceMarketPath)) {
+        try {
+          fs.unlinkSync(priceMarketPath);
+        } catch {
+          // ignore cleanup failures
+        }
+      }
+      if (fundamentalsPath && fs.existsSync(fundamentalsPath)) {
+        try {
+          fs.unlinkSync(fundamentalsPath);
+        } catch {
+          // ignore cleanup failures
+        }
+      }
+      if (newsPath && fs.existsSync(newsPath)) {
+        try {
+          fs.unlinkSync(newsPath);
+        } catch {
+          // ignore cleanup failures
+        }
+      }
+    };
+
+    child.on("error", (error) => {
+      clearTimeout(timeoutId);
+      cleanupHistorical();
+      reject(new Error(`Failed to start analyzer: ${error.message}`));
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timeoutId);
+      cleanupHistorical();
+      const marker = "__EQUITYIQ_JSON__";
+      const markerIndex = stdout.lastIndexOf(marker);
+      if (markerIndex === -1) {
+        const message = stderr || stdout || "No output from analyzer";
+        reject(new Error(`Analysis failed (exit ${code}): ${message}`));
+        return;
+      }
+      const jsonText = stdout.slice(markerIndex + marker.length).trim();
+      try {
+        const payload = JSON.parse(jsonText);
+        resolve(payload);
+      } catch (error) {
+        reject(
+          new Error(
+            `Analysis response parsing failed: ${error.message}. Raw: ${jsonText}`,
+          ),
+        );
+      }
+    });
+  });
 router.get("/chart/:symbol", async (req, res) => {
   try {
     const symbol = req.params.symbol;
@@ -108,6 +304,77 @@ router.get("/indices", async (req, res) => {
   } catch (error) {
     console.error("Yahoo Finance fetch failed:", error?.message || error);
     return res.status(500).json({ message: "Failed to fetch market data" });
+  }
+});
+
+router.post("/analysis", async (req, res) => {
+  try {
+    const symbol = typeof req.body?.symbol === "string" ? req.body.symbol : "";
+    const companyName =
+      typeof req.body?.companyName === "string" ? req.body.companyName : "";
+    const historical = Array.isArray(req.body?.historical)
+      ? req.body.historical
+      : null;
+    const companyProfile =
+      req.body?.companyProfile && typeof req.body.companyProfile === "object"
+        ? req.body.companyProfile
+        : null;
+    const priceData =
+      req.body?.priceData && typeof req.body.priceData === "object"
+        ? req.body.priceData
+        : null;
+    const fundamentals =
+      req.body?.fundamentals && typeof req.body.fundamentals === "object"
+        ? req.body.fundamentals
+        : null;
+    const news = Array.isArray(req.body?.news) ? req.body.news : null;
+    const trimmedSymbol = symbol.trim();
+    const trimmedName = companyName.trim();
+
+    if (!trimmedSymbol && !trimmedName) {
+      return res
+        .status(400)
+        .json({ message: "symbol or companyName is required" });
+    }
+
+    if (req.body?.historical && (!Array.isArray(historical) || !historical)) {
+      return res.status(400).json({ message: "historical must be an array" });
+    }
+
+    if (Array.isArray(historical) && historical.length === 0) {
+      return res.status(400).json({ message: "historical data is empty" });
+    }
+
+    if (req.body?.companyProfile && !companyProfile) {
+      return res
+        .status(400)
+        .json({ message: "companyProfile must be an object" });
+    }
+    if (req.body?.priceData && !priceData) {
+      return res.status(400).json({ message: "priceData must be an object" });
+    }
+    if (req.body?.fundamentals && !fundamentals) {
+      return res
+        .status(400)
+        .json({ message: "fundamentals must be an object" });
+    }
+    if (req.body?.news && !news) {
+      return res.status(400).json({ message: "news must be an array" });
+    }
+
+    const payload = await runPythonAnalysis({
+      symbol: trimmedSymbol || undefined,
+      companyName: trimmedName || undefined,
+      historical: Array.isArray(historical) ? historical : undefined,
+      companyProfile: companyProfile || undefined,
+      priceData: priceData || undefined,
+      fundamentals: fundamentals || undefined,
+      news: news || undefined,
+    });
+    return res.json(payload);
+  } catch (error) {
+    console.error("Analysis failed:", error?.message || error);
+    return res.status(500).json({ message: "Analysis failed" });
   }
 });
 
@@ -531,8 +798,6 @@ router.get("/stocks/:symbol", async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch stock" });
   }
 });
-import { fetchCompanyNews } from "../services/news.services.js";
-
 router.get("/news/:company", async (req, res) => {
   try {
     const company = req.params.company;

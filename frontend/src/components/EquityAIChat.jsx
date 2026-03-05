@@ -18,7 +18,146 @@ const Message = ({ m }) => (
   </div>
 );
 
-const EquityAIChat = ({ companyName, onClose }) => {
+const SCORE_LABELS = {
+  Graph: "Graph Analysis",
+  Profile: "Company Profile",
+  PriceMarket: "Price & Market",
+  Valuation: "Valuation",
+  News: "News Sentiment",
+};
+
+const getRecommendationTone = (recommendation) => {
+  const value = String(recommendation || "").toUpperCase();
+  if (value.includes("STRONG BUY")) return "bg-green-600";
+  if (value.includes("BUY")) return "bg-green-500";
+  if (value.includes("HOLD")) return "bg-yellow-500";
+  if (value.includes("SELL")) return "bg-orange-500";
+  return "bg-gray-400";
+};
+
+const buildExplanation = ({ finalScore, scores, recommendation }) => {
+  const entries = Object.entries(scores || {}).filter(
+    ([, value]) => typeof value === "number" && !Number.isNaN(value),
+  );
+  if (entries.length === 0) {
+    return "EquityAI could not compute all signals yet. Please try again.";
+  }
+  entries.sort((a, b) => b[1] - a[1]);
+  const [topKey, topValue] = entries[0];
+  const [bottomKey, bottomValue] = entries[entries.length - 1];
+  const topLabel = SCORE_LABELS[topKey] || topKey;
+  const bottomLabel = SCORE_LABELS[bottomKey] || bottomKey;
+  let tone = "balanced";
+  if (typeof finalScore === "number") {
+    if (finalScore >= 7.5) tone = "positive";
+    else if (finalScore < 5) tone = "cautious";
+  }
+  const rec = recommendation || "HOLD / MAY BUY";
+  return `${topLabel} looks strongest (${topValue.toFixed(
+    2,
+  )}) while ${bottomLabel} is softer (${bottomValue.toFixed(
+    2,
+  )}). Overall signals are ${tone}, so the system recommends ${rec}.`;
+};
+
+const buildConfidence = (scores, errors) => {
+  const values = Object.values(scores || {}).filter(
+    (value) => typeof value === "number" && !Number.isNaN(value),
+  );
+  if (values.length === 0) return "Low (~55%)";
+  const maxValue = Math.max(...values);
+  const minValue = Math.min(...values);
+  const errorCount = Object.keys(errors || {}).length;
+  const spread = maxValue - minValue;
+  let confidence = Math.round(82 - spread * 4 - errorCount * 8);
+  confidence = Math.min(90, Math.max(45, confidence));
+  const label = confidence >= 80 ? "High" : confidence >= 65 ? "Medium" : "Low";
+  return `${label} (~${confidence}%)`;
+};
+
+const AnalysisResult = ({ payload, companyName, symbol, formatScore }) => {
+  const name = companyName || symbol || "Company";
+  const scores = payload?.scores || {};
+  const errors = payload?.errors || {};
+  const scoreEntries = Object.entries(scores);
+  const recommendation = payload?.recommendation || "N/A";
+  const confidence = buildConfidence(scores, errors);
+  const explanation = buildExplanation({
+    finalScore: payload?.finalScore,
+    scores,
+    recommendation,
+  });
+  const disclaimer =
+    "This analysis is generated using EquityAI's machine learning models that evaluate technical trends, company fundamentals, market data, valuation metrics, and recent news sentiment. The result is an AI-based opinion and should not be considered financial advice.";
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-5 text-sm text-gray-800 shadow-sm">
+      <div className="text-xs font-semibold text-gray-500">
+        EquityAI Analysis — {name}
+      </div>
+      <div className="mt-4 space-y-2">
+        <div className="text-sm font-semibold text-gray-900">
+          Final Score: {formatScore(payload?.finalScore)} / 10
+        </div>
+        <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+          Recommendation:
+          <span
+            className={`inline-flex h-2.5 w-2.5 rounded-full ${getRecommendationTone(
+              recommendation,
+            )}`}
+          />
+          <span>{recommendation}</span>
+        </div>
+      </div>
+
+      <div className="my-4 h-px w-full bg-gray-200" />
+
+      <div className="text-sm font-semibold text-gray-900">
+        Analyzer Breakdown
+      </div>
+      <div className="mt-2 space-y-1 text-sm text-gray-700">
+        {scoreEntries.length === 0 ? (
+          <div>No analyzer scores available.</div>
+        ) : (
+          scoreEntries.map(([key, value]) => (
+            <div key={key} className="flex items-center justify-between">
+              <span>{SCORE_LABELS[key] || key}</span>
+              <span className="font-semibold">{formatScore(value)}</span>
+            </div>
+          ))
+        )}
+        {Object.keys(errors).length > 0 ? (
+          <div className="text-xs text-orange-600">
+            Used defaults for: {Object.keys(errors).join(", ")}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="my-4 h-px w-full bg-gray-200" />
+
+      <div className="text-sm font-semibold text-gray-900">AI Explanation</div>
+      <p className="mt-2 text-sm text-gray-700">{explanation}</p>
+
+      <div className="my-4 h-px w-full bg-gray-200" />
+
+      <div className="text-sm font-semibold text-gray-900">Confidence</div>
+      <div className="mt-2 text-sm text-gray-700">{confidence}</div>
+
+      <div className="my-4 h-px w-full bg-gray-200" />
+
+      <p className="text-xs text-gray-500">{disclaimer}</p>
+    </div>
+  );
+};
+
+const EquityAIChat = ({
+  companyName,
+  symbol,
+  companyProfile,
+  priceData,
+  fundamentals,
+  onClose,
+}) => {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -29,6 +168,8 @@ const EquityAIChat = ({ companyName, onClose }) => {
   const [input, setInput] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [error, setError] = useState("");
+  const [analysisResult, setAnalysisResult] = useState(null);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -38,26 +179,90 @@ const EquityAIChat = ({ companyName, onClose }) => {
     });
   }, [messages]);
 
-  const handleSend = () => {
-    if (isAnalyzing) return;
-    // start analyzing: clear messages and show spinner
-    setIsAnalyzing(true);
-    setMessages([]);
+  const formatScore = (value) =>
+    typeof value === "number" && !Number.isNaN(value) ? value.toFixed(2) : "--";
 
-    // simulate analysis delay
-    setTimeout(() => {
+  const loadHistoricalData = async () => {
+    if (!symbol) {
+      throw new Error("Missing stock symbol for analysis.");
+    }
+
+    const params = new URLSearchParams({
+      range: "1y",
+      interval: "1d",
+    });
+    const response = await fetch(
+      `/api/market/chart/${encodeURIComponent(symbol)}?${params.toString()}`,
+    );
+
+    if (!response.ok) {
+      throw new Error("Failed to load 1-year historical data.");
+    }
+
+    const payload = await response.json();
+    const raw = Array.isArray(payload?.data) ? payload.data : [];
+    const normalized = raw
+      .map((point) => ({
+        time: point?.time ?? null,
+        close: point?.value ?? point?.close ?? null,
+        volume: point?.volume ?? null,
+      }))
+      .filter((point) => typeof point.close === "number");
+
+    if (normalized.length === 0) {
+      throw new Error("Historical data is empty for this symbol.");
+    }
+
+    return normalized;
+  };
+
+  const handleSend = async () => {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    setError("");
+    setMessages([]);
+    setAnalysisResult(null);
+
+    try {
+      const historical = await loadHistoricalData();
+      const response = await fetch("/api/market/analysis", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          symbol: symbol || "",
+          companyName: companyName || "",
+          historical,
+          companyProfile: companyProfile || null,
+          priceData: priceData || null,
+          fundamentals: fundamentals || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Analysis failed. Try again in a moment.");
+      }
+
+      const payload = await response.json();
       setIsAnalyzing(false);
       setHasAnalyzed(true);
+      setAnalysisResult(payload);
+    } catch (err) {
+      setIsAnalyzing(false);
+      setHasAnalyzed(false);
+      setAnalysisResult(null);
+      const message =
+        err?.message || "Unable to run EquityAI analysis right now.";
+      setError(message);
       setMessages([
         {
           id: Date.now(),
           role: "ai",
-          text: `EquityAI (mock): Quick insight on ${
-            companyName || "Company"
-          }: analysis complete.`,
+          text: `EquityAI error: ${message}`,
         },
       ]);
-    }, 1600);
+    }
   };
 
   return (
@@ -94,9 +299,17 @@ const EquityAIChat = ({ companyName, onClose }) => {
           </div>
         ) : (
           <div className="space-y-3">
-            {messages.map((m) => (
-              <Message key={m.id} m={m} />
-            ))}
+            {analysisResult ? (
+              <AnalysisResult
+                payload={analysisResult}
+                companyName={companyName}
+                symbol={symbol}
+                formatScore={formatScore}
+              />
+            ) : (
+              messages.map((m) => <Message key={m.id} m={m} />)
+            )}
+            {error ? <div className="text-xs text-red-500">{error}</div> : null}
           </div>
         )}
       </div>

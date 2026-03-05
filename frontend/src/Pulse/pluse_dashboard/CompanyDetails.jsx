@@ -668,6 +668,10 @@ const CompanyDetails = () => {
           ) : showAiChat ? (
             <EquityAIChat
               companyName={decodedName || "Company"}
+              symbol={resolvedSymbol || ""}
+              companyProfile={companyProfile}
+              priceData={priceData}
+              fundamentals={fundamentals}
               onClose={() => setShowAiChat(false)}
             />
           ) : (
