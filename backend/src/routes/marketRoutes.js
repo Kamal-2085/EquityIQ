@@ -66,11 +66,7 @@ const runPythonAnalysis = ({
   news,
 }) =>
   new Promise((resolve, reject) => {
-    const predictorDir = path.resolve(
-      __dirname,
-      "../../..",
-      "Stock Price Predictor",
-    );
+    const predictorDir = path.resolve(__dirname, "../../..", "EquityAI");
     const scriptPath = path.join(predictorDir, "FinalRecommendation.py");
     if (!fs.existsSync(scriptPath)) {
       reject(new Error("Model script not found"));
