@@ -13,6 +13,7 @@ const OrderPanel = ({
   const [priceMode, setPriceMode] = useState("PRICE_LIMIT");
   const [accountBalance, setAccountBalance] = useState(0);
   const [isDemoUser, setIsDemoUser] = useState(false);
+  const [hasActiveUser, setHasActiveUser] = useState(false);
 
   useEffect(() => {
     const loadBalance = () => {
@@ -20,21 +21,29 @@ const OrderPanel = ({
       if (!raw) {
         setAccountBalance(0);
         setIsDemoUser(false);
+        setHasActiveUser(false);
         return;
       }
       try {
         const parsed = JSON.parse(raw);
         const storedUser = parsed?.user || {};
+        const expiresAt = Number(parsed?.expiresAt || 0);
+        const isExpired = !expiresAt || Date.now() > expiresAt;
         const balance = storedUser?.accountBalance;
         setAccountBalance(typeof balance === "number" ? balance : 0);
         const demoByFlag = Boolean(storedUser?.isDemo);
         const demoByIdentity =
           storedUser?.id === "demo-user" ||
           storedUser?.email === "demo@equityiq.local";
-        setIsDemoUser(demoByFlag || demoByIdentity);
+        const isDemo = demoByFlag || demoByIdentity;
+        setIsDemoUser(isDemo);
+        setHasActiveUser(
+          !isExpired && Boolean(storedUser?.email || storedUser?.id),
+        );
       } catch {
         setAccountBalance(0);
         setIsDemoUser(false);
+        setHasActiveUser(false);
       }
     };
 
@@ -76,7 +85,8 @@ const OrderPanel = ({
   const approxRequiredRaw = effectivePrice > 0 ? effectivePrice + 5 : 0;
   const approxRequired = Math.floor(approxRequiredRaw);
   const submitDisabled = qtyNumber <= 0;
-  const analyzeDisabled = isDemoUser || typeof onAnalyze !== "function";
+  const analyzeDisabled =
+    isDemoUser || !hasActiveUser || typeof onAnalyze !== "function";
 
   return (
     <aside className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col flex-1">
@@ -225,7 +235,13 @@ const OrderPanel = ({
           }}
           disabled={analyzeDisabled}
           aria-disabled={analyzeDisabled}
-          title={isDemoUser ? "Unavailable in demo mode" : undefined}
+          title={
+            isDemoUser
+              ? "Unavailable in demo mode"
+              : !hasActiveUser
+              ? "Please log in to use EquityAI"
+              : undefined
+          }
           className={`inline-flex items-center gap-1 text-xs font-semibold ${
             analyzeDisabled
               ? "text-gray-400 cursor-not-allowed"
