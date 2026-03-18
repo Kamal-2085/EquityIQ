@@ -4,6 +4,7 @@ import toast from "react-hot-toast";
 import PulseNavbar from "./PulseNavbar.jsx";
 import Footer from "../landing_page/Footer.jsx";
 import api from "../auth/apiClient";
+import { cleanupPulseDemoSession } from "./demoSession";
 
 const PulseLayout = () => {
   const toastShownRef = useRef(false);
@@ -25,6 +26,15 @@ const PulseLayout = () => {
         }
       })
       .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const cleaned = cleanupPulseDemoSession();
+      if (cleaned) {
+        sessionStorage.removeItem("market-toast-shown");
+      }
+    };
   }, []);
 
   return (

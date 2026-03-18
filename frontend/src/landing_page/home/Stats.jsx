@@ -1,28 +1,13 @@
 import React from "react";
 import img4 from "../../assets/img4.png";
 import { Link, useNavigate } from "react-router-dom";
-import { clearAccessToken } from "../../auth/apiClient";
-
-const DEMO_USER_PAYLOAD = {
-  user: {
-    id: "demo-user",
-    name: "Demo User",
-    email: "demo@equityiq.local",
-    role: "user",
-    isDemo: true,
-    accountBalance: 100000,
-  },
-  expiresAt: Date.now() + 24 * 60 * 60 * 1000,
-};
+import { startPulseDemoSession } from "../../Pulse/demoSession";
 
 const Stats = () => {
   const navigate = useNavigate();
 
   const handleTryPulseDemo = () => {
-    localStorage.setItem("equityiq_user", JSON.stringify(DEMO_USER_PAYLOAD));
-    localStorage.removeItem("equityiq_access_token");
-    clearAccessToken();
-    window.dispatchEvent(new Event("equityiq_user_updated"));
+    startPulseDemoSession();
     navigate("/pulse");
   };
 
