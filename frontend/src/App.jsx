@@ -32,6 +32,13 @@ import Transaction_history_page from "./transaction_history/Transaction_history_
 import Policies from "./policies/Policies.jsx";
 import Create_Ticket from "./ticket/Create_Ticket.jsx";
 import MyTickets from "./ticket/MyTickets.jsx";
+import AdminLayout from "./admin/AdminLayout.jsx";
+import AdminDashboard from "./admin/AdminDashboard.jsx";
+import AdminUsers from "./admin/AdminUsers.jsx";
+import AdminTickets from "./admin/AdminTickets.jsx";
+import AdminStocks from "./admin/AdminStocks.jsx";
+import AdminAnalytics from "./admin/AdminAnalytics.jsx";
+import AdminNews from "./admin/AdminNews.jsx";
 const LandingLayout = () => (
   <>
     <Navbar />
@@ -81,6 +88,16 @@ const App = () => {
         <Route path="/pulse" element={<PulseLayout />}>
           <Route index element={<PulseDashboard />} />
           <Route path=":company_name" element={<CompanyDetails />} />
+        </Route>
+
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="tickets" element={<AdminTickets />} />
+          <Route path="stocks" element={<AdminStocks />} />
+          <Route path="news" element={<AdminNews />} />
+          <Route path="analytics" element={<AdminAnalytics />} />
         </Route>
       </Routes>
     </>

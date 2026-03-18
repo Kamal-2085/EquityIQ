@@ -19,6 +19,20 @@ const REFRESH_EXP_SECONDS = process.env.REFRESH_EXP_SECONDS
   ? Number(process.env.REFRESH_EXP_SECONDS)
   : 7 * 24 * 60 * 60; // 7 days
 
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
+const ensureAdminRole = async (user) => {
+  if (!user?.email) return;
+  const normalizedEmail = String(user.email).trim().toLowerCase();
+  if (ADMIN_EMAILS.includes(normalizedEmail) && user.role !== "admin") {
+    user.role = "admin";
+    await user.save();
+  }
+};
+
 function createAccessToken(payload) {
   return jwt.sign(payload, process.env.ACCESS_SECRET || "access_secret", {
     expiresIn: ACCESS_EXP,
@@ -563,6 +577,7 @@ export const verifyPaymentOtp = async (req, res) => {
         isEmailVerified: user.isEmailVerified,
         avatarUrl: user.avatarUrl,
         accountBalance: user.accountBalance ?? 0,
+        role: user.role || "user",
       },
     });
   } catch (error) {
@@ -644,6 +659,7 @@ export const verifyEmailOtp = async (req, res) => {
         phone: user.phone,
         isEmailVerified: user.isEmailVerified,
         avatarUrl: user.avatarUrl,
+        role: user.role || "user",
       },
     });
   } catch (error) {
@@ -678,6 +694,8 @@ export const login = async (req, res) => {
       return res.status(403).json({ message: "Email not verified" });
     }
 
+    await ensureAdminRole(user);
+
     // Create tokens and set refresh cookie (7 days)
     const accessToken = createAccessToken({ userId: user._id });
     const refreshToken = createRefreshToken({ userId: user._id });
@@ -704,6 +722,7 @@ export const login = async (req, res) => {
         isEmailVerified: user.isEmailVerified,
         avatarUrl: user.avatarUrl,
         accountBalance: user.accountBalance ?? 0,
+        role: user.role || "user",
       },
     });
   } catch (error) {
@@ -861,6 +880,7 @@ export const createTicket = async (req, res) => {
       ticketId,
       title: normalizedTitle,
       desc: normalizedDesc,
+      status: "open",
     });
     await user.save();
 

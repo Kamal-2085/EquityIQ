@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
     isEmailVerified: {
       type: Boolean,
       default: false,
@@ -76,6 +81,13 @@ const userSchema = new mongoose.Schema(
           ticketId: { type: String, required: true, trim: true },
           title: { type: String, required: true, trim: true },
           desc: { type: String, required: true, trim: true },
+          status: {
+            type: String,
+            enum: ["open", "in_progress", "closed"],
+            default: "open",
+          },
+          adminReply: { type: String, default: "" },
+          updatedAt: { type: Date, default: Date.now },
           createdAt: { type: Date, default: Date.now },
         },
       ],

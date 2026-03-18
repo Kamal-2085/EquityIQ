@@ -69,6 +69,15 @@ const ProfileMenu = ({
             ₹{(user?.accountBalance || 0).toLocaleString()}
           </span>
         </Link>
+        {user?.role === "admin" ? (
+          <Link
+            to="/admin"
+            className="w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
+          >
+            <span>Admin Console</span>
+            <span className="text-gray-900 font-medium">Go</span>
+          </Link>
+        ) : null}
         <button
           type="button"
           onClick={onProfileImageClick}
