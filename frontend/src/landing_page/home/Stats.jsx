@@ -31,7 +31,8 @@ const Stats = () => {
       <div className="flex items-center md:gap-8 gap-12 mb-12">
         <Link
           to="/products"
-        className="text-blue-600 font-medium hover:text-blue-700 transition">
+          className="text-blue-600 font-medium hover:text-blue-700 transition"
+        >
           Explore our products →
         </Link>
         <button

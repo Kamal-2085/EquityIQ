@@ -12,20 +12,29 @@ const OrderPanel = ({
   const [price, setPrice] = useState("942.45");
   const [priceMode, setPriceMode] = useState("PRICE_LIMIT");
   const [accountBalance, setAccountBalance] = useState(0);
+  const [isDemoUser, setIsDemoUser] = useState(false);
 
   useEffect(() => {
     const loadBalance = () => {
       const raw = localStorage.getItem("equityiq_user");
       if (!raw) {
         setAccountBalance(0);
+        setIsDemoUser(false);
         return;
       }
       try {
         const parsed = JSON.parse(raw);
-        const balance = parsed?.user?.accountBalance;
+        const storedUser = parsed?.user || {};
+        const balance = storedUser?.accountBalance;
         setAccountBalance(typeof balance === "number" ? balance : 0);
+        const demoByFlag = Boolean(storedUser?.isDemo);
+        const demoByIdentity =
+          storedUser?.id === "demo-user" ||
+          storedUser?.email === "demo@equityiq.local";
+        setIsDemoUser(demoByFlag || demoByIdentity);
       } catch {
         setAccountBalance(0);
+        setIsDemoUser(false);
       }
     };
 
@@ -67,6 +76,7 @@ const OrderPanel = ({
   const approxRequiredRaw = effectivePrice > 0 ? effectivePrice + 5 : 0;
   const approxRequired = Math.floor(approxRequiredRaw);
   const submitDisabled = qtyNumber <= 0;
+  const analyzeDisabled = isDemoUser || typeof onAnalyze !== "function";
 
   return (
     <aside className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-sm flex flex-col flex-1">
@@ -209,8 +219,18 @@ const OrderPanel = ({
       <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4 text-xs text-gray-500">
         <button
           type="button"
-          onClick={() => onAnalyze && onAnalyze()}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-blue-400 hover:text-blue-700 cursor-pointer"
+          onClick={() => {
+            if (analyzeDisabled) return;
+            onAnalyze();
+          }}
+          disabled={analyzeDisabled}
+          aria-disabled={analyzeDisabled}
+          title={isDemoUser ? "Unavailable in demo mode" : undefined}
+          className={`inline-flex items-center gap-1 text-xs font-semibold ${
+            analyzeDisabled
+              ? "text-gray-400 cursor-not-allowed"
+              : "text-blue-400 hover:text-blue-700 cursor-pointer"
+          }`}
         >
           Analyze With EquityAI
         </button>
