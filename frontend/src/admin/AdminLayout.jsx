@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   FiBarChart2,
+  FiCreditCard,
   FiGlobe,
   FiGrid,
   FiInbox,
@@ -14,6 +15,7 @@ import { useAuth } from "../auth/AuthProvider";
 const navItems = [
   { to: "/admin", label: "Dashboard", icon: FiGrid },
   { to: "/admin/users", label: "Users", icon: FiUsers },
+  { to: "/admin/transactions", label: "Transactions", icon: FiCreditCard },
   { to: "/admin/tickets", label: "Tickets", icon: FiInbox },
   { to: "/admin/stocks", label: "Stocks", icon: FiTrendingUp },
   { to: "/admin/news", label: "News", icon: FiGlobe },

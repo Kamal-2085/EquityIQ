@@ -39,6 +39,7 @@ import AdminTickets from "./admin/AdminTickets.jsx";
 import AdminStocks from "./admin/AdminStocks.jsx";
 import AdminAnalytics from "./admin/AdminAnalytics.jsx";
 import AdminNews from "./admin/AdminNews.jsx";
+import AdminTransactions from "./admin/AdminTransactions.jsx";
 const LandingLayout = () => (
   <>
     <Navbar />
@@ -94,6 +95,7 @@ const App = () => {
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="transactions" element={<AdminTransactions />} />
           <Route path="tickets" element={<AdminTickets />} />
           <Route path="stocks" element={<AdminStocks />} />
           <Route path="news" element={<AdminNews />} />

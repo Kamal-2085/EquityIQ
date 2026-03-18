@@ -7,6 +7,23 @@ const router = express.Router();
 
 router.use(requireAuth, requireAdmin);
 
+const VALID_TXN_STATUSES = ["hold", "completed", "rejected"];
+
+const normalizeTxnStatus = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+const getBalanceEffect = (txnType, status, amount) => {
+  if (status !== "completed") return 0;
+  const normalizedType = String(txnType || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedType === "add") return amount;
+  if (normalizedType === "withdraw") return -amount;
+  return 0;
+};
+
 router.get("/me", (req, res) => {
   const user = req.currentUser;
   return res.status(200).json({
@@ -96,6 +113,141 @@ router.get("/users", async (req, res) => {
     }));
 
     return res.status(200).json({ users: normalized });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.get("/transactions", async (req, res) => {
+  try {
+    const status = normalizeTxnStatus(req.query.status);
+    const limit = Number(req.query.limit || 0);
+
+    const matchStatus = VALID_TXN_STATUSES.includes(status) ? status : null;
+
+    const pipeline = [
+      {
+        $match: {
+          transactionHistory: { $exists: true, $ne: [] },
+        },
+      },
+      {
+        $project: {
+          name: 1,
+          email: 1,
+          accountBalance: 1,
+          transactionHistory: { $ifNull: ["$transactionHistory", []] },
+        },
+      },
+      { $unwind: "$transactionHistory" },
+    ];
+
+    if (matchStatus) {
+      pipeline.push({
+        $match: {
+          "transactionHistory.status": matchStatus,
+        },
+      });
+    }
+
+    pipeline.push(
+      {
+        $project: {
+          userId: "$_id",
+          userName: "$name",
+          userEmail: "$email",
+          accountBalance: 1,
+          txnId: "$transactionHistory.txnId",
+          amount: "$transactionHistory.amount",
+          date: "$transactionHistory.date",
+          txnType: "$transactionHistory.txnType",
+          status: {
+            $ifNull: ["$transactionHistory.status", "hold"],
+          },
+        },
+      },
+      { $sort: { date: -1 } },
+    );
+
+    if (Number.isFinite(limit) && limit > 0) {
+      pipeline.push({ $limit: limit });
+    }
+
+    const transactions = await User.aggregate(pipeline);
+
+    return res.status(200).json({ transactions });
+  } catch (error) {
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
+router.patch("/transactions/:userId/:txnId/status", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "").trim();
+    const txnId = String(req.params.txnId || "").trim();
+    const nextStatus = normalizeTxnStatus(req.body?.status);
+
+    if (!userId || !txnId) {
+      return res
+        .status(400)
+        .json({ message: "User id and transaction id are required" });
+    }
+
+    if (!VALID_TXN_STATUSES.includes(nextStatus)) {
+      return res.status(400).json({ message: "Invalid transaction status" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const transactions = user.transactionHistory || [];
+    const txnIndex = transactions.findIndex(
+      (txn) =>
+        String(txn?.txnId || "")
+          .trim()
+          .toLowerCase() === txnId.toLowerCase(),
+    );
+
+    if (txnIndex < 0) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    const txn = transactions[txnIndex];
+    const prevStatus = normalizeTxnStatus(txn.status) || "hold";
+    const amount = Number(txn.amount) || 0;
+
+    const previousEffect = getBalanceEffect(txn.txnType, prevStatus, amount);
+    const nextEffect = getBalanceEffect(txn.txnType, nextStatus, amount);
+    const balanceDelta = nextEffect - previousEffect;
+    const nextBalance = (Number(user.accountBalance) || 0) + balanceDelta;
+
+    if (nextBalance < 0) {
+      return res
+        .status(400)
+        .json({ message: "Insufficient balance to complete withdrawal" });
+    }
+
+    txn.status = nextStatus;
+    user.accountBalance = Number(nextBalance.toFixed(2));
+    await user.save();
+
+    return res.status(200).json({
+      message: "Transaction status updated",
+      transaction: {
+        txnId: txn.txnId,
+        amount: txn.amount,
+        date: txn.date,
+        txnType: txn.txnType,
+        status: txn.status,
+      },
+      user: {
+        id: user._id,
+        accountBalance: user.accountBalance,
+      },
+      balanceDelta,
+    });
   } catch (error) {
     return res.status(500).json({ message: "Server error" });
   }

@@ -1,27 +1,56 @@
-import React from 'react'
-import img4 from '../../assets/img4.png'
-import { Link } from 'react-router-dom'
+import React from "react";
+import img4 from "../../assets/img4.png";
+import { Link, useNavigate } from "react-router-dom";
+import { clearAccessToken } from "../../auth/apiClient";
+
+const DEMO_USER_PAYLOAD = {
+  user: {
+    id: "demo-user",
+    name: "Demo User",
+    email: "demo@equityiq.local",
+    role: "user",
+    isDemo: true,
+    accountBalance: 100000,
+  },
+  expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+};
+
 const Stats = () => {
+  const navigate = useNavigate();
+
+  const handleTryPulseDemo = () => {
+    localStorage.setItem("equityiq_user", JSON.stringify(DEMO_USER_PAYLOAD));
+    localStorage.removeItem("equityiq_access_token");
+    clearAccessToken();
+    window.dispatchEvent(new Event("equityiq_user_updated"));
+    navigate("/pulse");
+  };
+
   return (
     <section className="w-full flex flex-col items-center py-16">
       <div className="flex items-center md:gap-8 gap-12 mb-12">
-        <Link to='/products'
+        <Link
+          to="/products"
         className="text-blue-600 font-medium hover:text-blue-700 transition">
           Explore our products →
-          </Link>
-        <a href="#"
-         className="text-blue-600 font-medium hover:text-blue-700 transition">
+        </Link>
+        <button
+          type="button"
+          onClick={handleTryPulseDemo}
+          className="text-blue-600 font-medium hover:text-blue-700 transition cursor-pointer"
+        >
           Try Pulse demo →
-          </a>
+        </button>
       </div>
       <div className="w-full flex justify-center">
-        <img 
-        src={img4} 
-        alt="Media mentions" 
-        className="w-full max-w-4xl opacity-70"/>
+        <img
+          src={img4}
+          alt="Media mentions"
+          className="w-full max-w-4xl opacity-70"
+        />
       </div>
     </section>
-  )
-}
+  );
+};
 
-export default Stats
+export default Stats;
